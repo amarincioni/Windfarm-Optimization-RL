@@ -2,4 +2,4 @@ scaffolder/
 runs/
 wandb/
 models/
-#**.ZoneIdentifier
+**.ZoneIdentifier

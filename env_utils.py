@@ -37,7 +37,7 @@ class RandomResetWindProcess(WindProcess):
         if self.changing_wind:
             # Randomly change the wind speed and direction slightly
             self.wind_speed += np.random.uniform(-1, 1)
-            #self.wind_direction += np.random.uniform(-5, 5)
+            self.wind_direction += np.random.uniform(-3, 3)
 
             # Clip values
             self.wind_speed = np.clip(self.wind_speed, 0, 25)
