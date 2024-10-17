@@ -1,16 +1,4 @@
-def get_experiment_name(agent_name, env_name, privileged, changing_wind, mast_distancing, noise, training_steps):
-    name = f"{agent_name}_{env_name}"
-    if privileged:
-        name += "_privileged" + f"_md{mast_distancing}"
-    else:
-        name += "_unprivileged"
-    name = name + "_cw" if changing_wind else name
-    if noise > 0:
-        name += f"_n{noise}"
-    name += f"_{training_steps/1e6:.2f}M"
-    return name
-
-base_slurm_script = """#!/bin/bash
+#!/bin/bash
 #SBATCH --job-name=wf
 #SBATCH --output=output/%x_%j.out
 #SBATCH --error=output/%x_%j.err
@@ -47,9 +35,8 @@ echo "Reached working directory $CWD"
 echo "[$SHELL] Using GPU: "$CUDA_VISIBLE_DEVICES
 
 ### Actual experiment script
-python run_experiment.py --agent_name {agent_name} --env_name {env_name} --privileged {privileged} --changing_wind {changing_wind} --mast_distancing {mast_distancing} --noise {noise}
+python run_experiment.py --agent_name PPO --env_name 4wt_symmetric --privileged True --changing_wind False --mast_distancing 50 --noise 0.0
 
 echo "#### Finished experiment :)"
 DATE=$(date)
 echo "It is now $DATE"
-"""

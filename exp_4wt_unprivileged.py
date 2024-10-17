@@ -1,3 +1,18 @@
+import os
+os.environ['PYOPENGL_PLATFORM'] = 'egl'
+
+from pyvirtualdisplay import Display
+display = Display(visible=0, size=(800, 600))
+display.start()
+
+
+# import pyglet
+# pyglet.options["headless"] = True
+# pyglet.options["headless_device"] = 0
+# pyglet.options["shadow_window"] = False
+
+
+
 from env_utils import get_4wt_symmetric_env
 from utils import get_experiment_name, initialize_wandb_run
 from config import *

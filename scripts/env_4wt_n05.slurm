@@ -1,16 +1,4 @@
-def get_experiment_name(agent_name, env_name, privileged, changing_wind, mast_distancing, noise, training_steps):
-    name = f"{agent_name}_{env_name}"
-    if privileged:
-        name += "_privileged" + f"_md{mast_distancing}"
-    else:
-        name += "_unprivileged"
-    name = name + "_cw" if changing_wind else name
-    if noise > 0:
-        name += f"_n{noise}"
-    name += f"_{training_steps/1e6:.2f}M"
-    return name
-
-base_slurm_script = """#!/bin/bash
+#!/bin/bash
 #SBATCH --job-name=wf
 #SBATCH --output=output/%x_%j.out
 #SBATCH --error=output/%x_%j.err
@@ -34,7 +22,8 @@ echo "It is now $DATE"
 
 # Setup modules
 ml purge
-ml load shared DefaultModules ALICE/default gcc/11.2.0 slurm/alice/23.02.7 CUDA/11.8
+ml load shared DefaultModules ALICE/default gcc/11.2.0 slurm/alice/23.02.7 CUDA/11.8 
+# Xvfb Mesa Wayland libGLU glew/2.1.0-GCCcore-10.2.0
 
 # Setup conda environment
 conda init bash
@@ -47,9 +36,8 @@ echo "Reached working directory $CWD"
 echo "[$SHELL] Using GPU: "$CUDA_VISIBLE_DEVICES
 
 ### Actual experiment script
-python run_experiment.py --agent_name {agent_name} --env_name {env_name} --privileged {privileged} --changing_wind {changing_wind} --mast_distancing {mast_distancing} --noise {noise}
+python exp_4wt_n05.py
 
 echo "#### Finished experiment :)"
 DATE=$(date)
 echo "It is now $DATE"
-"""

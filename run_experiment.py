@@ -1,0 +1,39 @@
+from env_utils import get_4wt_symmetric_env, get_lhs_env
+from utils import get_experiment_name
+from utils_wandb import initialize_wandb_run
+from config import *
+
+from stable_baselines3 import PPO
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--agent_name", type=str, help="Agent name")
+parser.add_argument("--env_name", type=str, help="Env name")
+parser.add_argument("--privileged", type=bool, help="Enables privileged observations")
+parser.add_argument("--changing_wind", type=bool, help="Enables changing wind environment")
+parser.add_argument("--mast_distancing", type=int, help="Sets mast distancing")
+parser.add_argument("--noise", type=float, help="Sets noise in observations")
+#parser.add_argument("--load_pyglet", thelp="Enables the logging of videos and loads pyglet", action="store_true")
+args = parser.parse_args()
+
+# Initialize wandb run
+experiment_name = get_experiment_name(args.agent_name, args.env_name, args.privileged, args.mast_distancing, args.changing_wind, args.noise, TRAINING_STEPS)
+run, callback = initialize_wandb_run(experiment_name, args.agent_name, args.env_name, args.privileged, args.mast_distancing, args.changing_wind, args.noise, EVAL_REPS)
+print(f"Experiment name: {experiment_name}")
+print(f"Evaluations: {EVAL_REPS}")
+print(f"Episode length: {EPISODE_LEN}")
+
+# Initialize environment
+if "4wt_symmetric" in args.env_name:
+    env = get_4wt_symmetric_env(episode_length=EPISODE_LEN, privileged=args.privileged, changing_wind=args.changing_wind, mast_distancing=args.mast_distancing, noise=args.noise)
+elif "lhs" in args.env_name:
+    assert False, "LHS ENV NOT IMPLEMENTED"
+
+# Train the model
+model = PPO("MlpPolicy", env, verbose=1, tensorboard_log=f"runs/{run.id}")
+model.learn(total_timesteps=TRAINING_STEPS, callback=callback, progress_bar=True)
+print("Training done")
+
+# Save the model
+model.save(f"data/models/{experiment_name}")
+run.finish()

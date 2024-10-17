@@ -1,3 +1,6 @@
+import pyglet
+pyglet.options["headless"] = True
+
 from env_utils import get_4wt_symmetric_env
 from utils import get_experiment_name, initialize_wandb_run
 from config import *

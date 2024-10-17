@@ -37,7 +37,7 @@ class RandomResetWindProcess(WindProcess):
         if self.changing_wind:
             # Randomly change the wind speed and direction slightly
             self.wind_speed += np.random.uniform(-1, 1)
-            #self.wind_direction += np.random.uniform(-5, 5)
+            self.wind_direction += np.random.uniform(-3, 3)
 
             # Clip values
             self.wind_speed = np.clip(self.wind_speed, 0, 25)
@@ -74,6 +74,7 @@ class modified_env(WindFarmEnv):
         action_representation='wind',
         observation_noise=0.0,
         verbose=False,
+        load_pyglet_visualization=False,
         ):
 
         # Setting the wind state
@@ -97,6 +98,7 @@ class modified_env(WindFarmEnv):
             wind_process=self.wind_process,
             lidar_observations=lidar_observations,
             action_representation=action_representation,
+            load_pyglet_visualization=load_pyglet_visualization,
         )
 
         self.episode_length = episode_length
@@ -184,9 +186,11 @@ def get_4wt_symmetric_env(
     turbine_layout = ([0, 250, 0, 250], [0, 0, 250, 250])
     w, h = np.max(turbine_layout, axis=1)
 
-    mast_layout = get_grid_points(w, h, mast_distancing) if privileged else None
-    if mast_layout is not None:
+    if privileged: 
         print(f"Making env with n masts: {len(mast_layout[0])}")
+        mast_layout = get_grid_points(w, h, mast_distancing) 
+    else: 
+        mast_layout = None
 
     env = modified_env(
         turbine_layout=turbine_layout,

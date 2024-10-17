@@ -3,6 +3,17 @@ from utils import get_experiment_name, initialize_wandb_run
 from config import *
 
 from stable_baselines3 import PPO
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--agent_name", type=str, help="Agent name")
+parser.add_argument("--env_name", type=str, help="Env name")
+parser.add_argument("--privileged", help="Enables privileged observations", action="store_true")
+parser.add_argument("--changing_wind", help="Enables changing wind environment", action="store_true")
+parser.add_argument("--mast_distancing", type=float, help="Sets mast distancing")
+parser.add_argument("--noise", type=float, help="Sets noise in observations")
+parser.add_argument("--load_pyglet", thelp="Enables the logging of videos and loads pyglet", action="store_true")
+args = parser.parse_args()
 
 # Experiment parameters
 agent = "ppo"
