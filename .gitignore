@@ -6,3 +6,4 @@ conda_envs/
 wind-farm-env/
 scripts/output/
 #**.ZoneIdentifier
+**.ZoneIdentifier
