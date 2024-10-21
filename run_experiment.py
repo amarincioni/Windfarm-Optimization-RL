@@ -9,12 +9,13 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument("--agent_name", type=str, help="Agent name")
 parser.add_argument("--env_name", type=str, help="Env name")
-parser.add_argument("--privileged", type=bool, help="Enables privileged observations")
-parser.add_argument("--changing_wind", type=bool, help="Enables changing wind environment")
+parser.add_argument("--privileged", help="Enables privileged observations", action="store_true")
+parser.add_argument("--changing_wind", help="Enables changing wind environment", action="store_true")
 parser.add_argument("--mast_distancing", type=int, help="Sets mast distancing")
 parser.add_argument("--noise", type=float, help="Sets noise in observations")
 #parser.add_argument("--load_pyglet", thelp="Enables the logging of videos and loads pyglet", action="store_true")
 args = parser.parse_args()
+print(args)
 
 # Initialize wandb run
 experiment_name = get_experiment_name(args.agent_name, args.env_name, args.privileged, args.mast_distancing, args.changing_wind, args.noise, TRAINING_STEPS)
@@ -27,7 +28,10 @@ print(f"Episode length: {EPISODE_LEN}")
 if "4wt_symmetric" in args.env_name:
     env = get_4wt_symmetric_env(episode_length=EPISODE_LEN, privileged=args.privileged, changing_wind=args.changing_wind, mast_distancing=args.mast_distancing, noise=args.noise)
 elif "lhs" in args.env_name:
-    assert False, "LHS ENV NOT IMPLEMENTED"
+    env = get_lhs_env(layout_name=args.env_name, episode_length=EPISODE_LEN, privileged=args.privileged, changing_wind=args.changing_wind, mast_distancing=args.mast_distancing, noise=args.noise)
+    #assert False, "LHS ENV NOT IMPLEMENTED"
+else:
+    raise NotImplementedError(f"Environment {args.env_name} not implemented")
 
 # Train the model
 model = PPO("MlpPolicy", env, verbose=1, tensorboard_log=f"runs/{run.id}")

@@ -35,7 +35,7 @@ echo "Reached working directory $CWD"
 echo "[$SHELL] Using GPU: "$CUDA_VISIBLE_DEVICES
 
 ### Actual experiment script
-python run_experiment.py --agent_name PPO --env_name 4wt_symmetric --privileged True --changing_wind False --mast_distancing 125 --noise 0.0
+python run_experiment.py --agent_name PPO --env_name 4wt_symmetric --privileged  --mast_distancing 125 --noise 0.0
 
 echo "#### Finished experiment :)"
 DATE=$(date)

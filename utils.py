@@ -1,4 +1,4 @@
-def get_experiment_name(agent_name, env_name, privileged, changing_wind, mast_distancing, noise, training_steps):
+def get_experiment_name(agent_name, env_name, privileged, mast_distancing, changing_wind, noise, training_steps):
     name = f"{agent_name}_{env_name}"
     if privileged:
         name += "_privileged" + f"_md{mast_distancing}"
@@ -16,8 +16,8 @@ base_slurm_script = """#!/bin/bash
 #SBATCH --error=output/%x_%j.err
 #SBATCH --mail-user="s3442209@vuw.leidenuniv.nl"
 #SBATCH --mail-type="ALL"
-#SBATCH --partition="gpu-medium"
-#SBATCH --time=01-00:00:00
+#SBATCH --partition="{node_type}"
+#SBATCH --time=0{days}-00:00:00
 #SBATCH --ntasks=1
 #SBATCH --mem=32G
 #SBATCH --gpus=1
@@ -47,7 +47,7 @@ echo "Reached working directory $CWD"
 echo "[$SHELL] Using GPU: "$CUDA_VISIBLE_DEVICES
 
 ### Actual experiment script
-python run_experiment.py --agent_name {agent_name} --env_name {env_name} --privileged {privileged} --changing_wind {changing_wind} --mast_distancing {mast_distancing} --noise {noise}
+python run_experiment.py --agent_name {agent_name} --env_name {env_name} {privileged} {changing_wind} --mast_distancing {mast_distancing} --noise {noise}
 
 echo "#### Finished experiment :)"
 DATE=$(date)

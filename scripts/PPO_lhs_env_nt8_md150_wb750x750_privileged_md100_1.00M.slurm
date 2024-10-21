@@ -4,8 +4,8 @@
 #SBATCH --error=output/%x_%j.err
 #SBATCH --mail-user="s3442209@vuw.leidenuniv.nl"
 #SBATCH --mail-type="ALL"
-#SBATCH --partition="gpu-medium"
-#SBATCH --time=01-00:00:00
+#SBATCH --partition="gpu-long"
+#SBATCH --time=03-00:00:00
 #SBATCH --ntasks=1
 #SBATCH --mem=32G
 #SBATCH --gpus=1
@@ -35,7 +35,7 @@ echo "Reached working directory $CWD"
 echo "[$SHELL] Using GPU: "$CUDA_VISIBLE_DEVICES
 
 ### Actual experiment script
-python run_experiment.py --agent_name PPO --env_name 4wt_symmetric --privileged  --mast_distancing 100 --noise 0.0
+python run_experiment.py --agent_name PPO --env_name lhs_env_nt8_md150_wb750x750 --privileged  --mast_distancing 100 --noise 0.0
 
 echo "#### Finished experiment :)"
 DATE=$(date)

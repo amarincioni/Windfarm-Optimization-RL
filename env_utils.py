@@ -1,3 +1,6 @@
+import pyglet
+pyglet.options["headless"] = True
+
 from wind_farm_gym import WindFarmEnv
 from wind_farm_gym.wind_process.wind_process import WindProcess
 import numpy as np
@@ -187,8 +190,8 @@ def get_4wt_symmetric_env(
     w, h = np.max(turbine_layout, axis=1)
 
     if privileged: 
-        print(f"Making env with n masts: {len(mast_layout[0])}")
         mast_layout = get_grid_points(w, h, mast_distancing) 
+        print(f"Making env with n masts: {len(mast_layout[0])}")
     else: 
         mast_layout = None
 
@@ -213,15 +216,31 @@ def get_lhs_env(
         layout_name,
         episode_length=100, 
         privileged=True, 
+        mast_distancing=None,
         sorted_wind=False, 
         wind_speed=None,
         changing_wind=False,
         action_representation='wind',
+        load_pyglet_visualization=False,
+        noise=0.0,
     ):
+
+    if noise > 0:
+        raise NotImplementedError("Noise is not implemented for LHS environments")
     
     turbine_layout = np.load(f"data/layouts/{layout_name}_turbine_layout.npy")
-    mast_layout = np.load(f"data/layouts/{layout_name}_mast_layout.npy") if privileged else None
-    
+    if privileged:
+        if mast_distancing is None:
+            print("Loading default mast layout")
+            mast_layout = np.load(f"data/layouts/{layout_name}_mast_layout.npy") if privileged else None
+        else:
+            bounds = layout_name.split("_wb")[1].split("_")[0].split("x")
+            w, h = [int(b) for b in bounds]
+            mast_layout = get_grid_points(w, h, mast_distancing) 
+            print(f"Making env with n masts: {len(mast_layout[0])}")
+    else:
+        mast_layout = None
+
     env = modified_env(
         turbine_layout=turbine_layout,
         mast_layout=mast_layout,
@@ -231,27 +250,31 @@ def get_lhs_env(
         wind_speed=wind_speed,
         changing_wind=changing_wind,
         action_representation=action_representation,
+        load_pyglet_visualization=load_pyglet_visualization,
     )
 
     # plot the turbine layout, and masts with and x
+    plt.figure()
     plt.scatter(turbine_layout[0], turbine_layout[1])
-    plt.scatter(mast_layout[0], mast_layout[1], marker='x')
+    if privileged:
+        plt.scatter(mast_layout[0], mast_layout[1], marker='x')
     plt.axis('scaled')
-    plt.show()
+    plt.savefig(f'data/layouts/{layout_name}_md{mast_distancing}.png')
+    # plt.show()
     return env
 
 
 if __name__ == "__main__":
 
-    env = get_4wt_symmetric_env(
-        episode_length=100, 
-        privileged=True, 
-        mast_distancing=50, 
-        sorted_wind=False, 
-        wind_speed=8,
-        changing_wind=True,
-        verbose=True,
-    )
+    for md in [150, 200, 250, 300, 375, 500]:
+        env = get_lhs_env(
+            "lhs_env_nt16_md75_wb1500x1500",
+            episode_length=100, 
+            privileged=True, 
+            mast_distancing=md, 
+            changing_wind=True,
+            load_pyglet_visualization=True,
+        )
     
     obs = env.reset()
     #print(obs)
@@ -260,9 +283,10 @@ if __name__ == "__main__":
     non_ok = []
     is_ok = True
     nan_power_angles = []
-    for j in range(50):
-        for i in range(50):
-            obs, reward, done, _, info = env.step([0, 0, 0, 0])
+    for i in range(5):
+        for j in range(50):
+            action = np.zeros(env.action_space.shape)
+            obs, reward, done, _, info = env.step(action)
             # Print yaws and wind angle
             turbine_yaws = [t.yaw_angle for t in env.turbines]
             print(turbine_yaws, env.wind_process.wind_direction)
@@ -271,7 +295,7 @@ if __name__ == "__main__":
             print(np.max(np.abs(np.array(turbine_yaws) - wind)), np.min(np.abs(np.array(turbine_yaws) - wind)))
             try:
                 img = env.render(mode='rgb_array')
-                # save img
+            # save img
                 plt.imsave(f"figures/renders/{j}.png", img)
             except:
                 pass
