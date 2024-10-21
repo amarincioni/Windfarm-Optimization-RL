@@ -7,3 +7,4 @@ wind-farm-env/
 scripts/output/
 **.ZoneIdentifier
 **.pyc
+!data/models/
