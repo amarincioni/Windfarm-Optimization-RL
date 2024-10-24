@@ -99,6 +99,7 @@ class modified_env(WindFarmEnv):
             lidar_observations=lidar_observations,
             action_representation=action_representation,
             load_pyglet_visualization=load_pyglet_visualization,
+            farm_observations=['wind_speed', 'wind_direction'],
         )
 
         self.episode_length = episode_length

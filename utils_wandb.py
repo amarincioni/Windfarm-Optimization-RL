@@ -1,6 +1,6 @@
 from stable_baselines3.common.callbacks import BaseCallback
 from wandb.integration.sb3 import WandbCallback
-from stable_baselines3.common.callbacks import CallbackList, BaseCallback
+from stable_baselines3.common.callbacks import CallbackList, BaseCallback, EvalCallback
 import numpy as np
 import matplotlib.pyplot as plt
 import wandb
@@ -156,6 +156,9 @@ def initialize_wandb_run(
         run_id=run.id,
         env_fn=env_fn,
     )
-    callbacks = CallbackList([wandb_callback, video_eval_callback])
+    eval_callback = EvalCallback(env_fn(), best_model_save_path=f"models/{run.id}/",
+        log_path=f"models/{run.id}/", eval_freq=eval_freq,
+        deterministic=True, render=False)
+    callbacks = CallbackList([wandb_callback, video_eval_callback, eval_callback])
 
     return run, callbacks
