@@ -123,6 +123,7 @@ def initialize_wandb_run(
         eval_reps,
         eval_freq=10000,
         env_fn=None,
+        n_envs=16,
         ):
     config = {
         "experiment_name": experiment_name,
@@ -133,6 +134,7 @@ def initialize_wandb_run(
         "mast_distancing": mast_distancing,
         "noise": noise,
         "eval_reps": eval_reps,
+        "n_envs": n_envs,
     }
     run = wandb.init(
         project="thesis_tests",
