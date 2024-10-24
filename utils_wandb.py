@@ -8,7 +8,7 @@ import tensorflow as tf
 import os
 
 class VideoEvalCallback(BaseCallback):
-    def __init__(self, freq=1000, eval_reps=10, experiment_name="", run_id="", verbose: int = 0):
+    def __init__(self, freq=1000, eval_reps=10, experiment_name="", run_id="", verbose: int = 0, env_fn=None):
         super().__init__(verbose)
         # self.model = None  # type: BaseAlgorithm
         # self.training_env # type: VecEnv
@@ -19,6 +19,7 @@ class VideoEvalCallback(BaseCallback):
         self.eval_reps = eval_reps
         self.experiment_name = experiment_name
         self.run_id = run_id
+        self.env_fn = env_fn
 
         self.n_logged = 0
         
@@ -32,8 +33,13 @@ class VideoEvalCallback(BaseCallback):
 
     def _on_rollout_start(self) -> None:
         print(f"timestep {self.num_timesteps}, n_logged {self.n_logged}, freq {self.freq}, reps {self.eval_reps}")
+        
         if self.num_timesteps >= (self.n_logged * self.freq):
-            env = self.training_env.envs[0].unwrapped
+            
+            if self.env_fn is None:
+                env = self.training_env.envs[0].unwrapped
+            else:
+                env = self.env_fn()
             
             EPISODE_LEN = env.episode_length
             # Run a rollout saving a video and performance
@@ -49,7 +55,6 @@ class VideoEvalCallback(BaseCallback):
                 
                 for j in range(EPISODE_LEN):
                     action, _states = self.model.predict(obs)
-                    
 
                     obs, reward, terminated, truncated, info = env.step(action)
                     
@@ -117,6 +122,7 @@ def initialize_wandb_run(
         noise,
         eval_reps,
         eval_freq=10000,
+        env_fn=None,
         ):
     config = {
         "experiment_name": experiment_name,
@@ -146,6 +152,7 @@ def initialize_wandb_run(
         eval_reps=eval_reps,
         experiment_name=experiment_name,
         run_id=run.id,
+        env_fn=env_fn,
     )
     callbacks = CallbackList([wandb_callback, video_eval_callback])
 

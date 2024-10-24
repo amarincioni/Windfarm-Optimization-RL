@@ -1,6 +1,3 @@
-import pyglet
-pyglet.options["headless"] = True
-
 from wind_farm_gym import WindFarmEnv
 from wind_farm_gym.wind_process.wind_process import WindProcess
 import numpy as np
@@ -127,6 +124,8 @@ class modified_env(WindFarmEnv):
             turbine.yaw_angle = self._np_random.uniform(self.desired_min_yaw, self.desired_max_yaw)
             #turbine.yaw_angle = 0
 
+        power_output = np.sum(self.floris_interface.get_turbine_power())
+        info = {'power_output': np.nan_to_num(power_output, nan=0)}
 
         self.step_count = 0
         self.runs += 1
@@ -134,7 +133,7 @@ class modified_env(WindFarmEnv):
             print("Run count:", self.runs)
             print("Wind speed:", self.wind_process.wind_speed)
             print("Wind direction:", self.wind_process.wind_direction)
-        return obs, None
+        return obs, info
     
     # New adaptation for gymnasium
     # Step now splits done into terminated and truncated
@@ -186,6 +185,8 @@ def get_4wt_symmetric_env(
         action_representation='wind',
         noise=0.0,
         verbose=False,
+        load_pyglet_visualization=False,
+        floris_path="myfloris.json",
     ):
     turbine_layout = ([0, 250, 0, 250], [0, 0, 250, 250])
     w, h = np.max(turbine_layout, axis=1)
@@ -200,7 +201,7 @@ def get_4wt_symmetric_env(
         turbine_layout=turbine_layout,
         #lidar_observations=('wind_speed', 'wind_direction'),
         mast_layout=mast_layout,
-        floris="myfloris.json",
+        floris=floris_path,
         episode_length=episode_length,
         sorted_wind=sorted_wind,
         wind_speed=wind_speed,
@@ -208,6 +209,7 @@ def get_4wt_symmetric_env(
         action_representation=action_representation,
         observation_noise=noise,
         verbose=verbose,
+        load_pyglet_visualization=load_pyglet_visualization,
     )
 
     return env
@@ -266,7 +268,6 @@ def get_lhs_env(
 
 
 if __name__ == "__main__":
-
     for md in [150, 200, 250, 300, 375, 500]:
         env = get_lhs_env(
             "lhs_env_nt16_md75_wb1500x1500",
