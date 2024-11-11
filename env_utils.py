@@ -110,10 +110,12 @@ class modified_env(WindFarmEnv):
 
     # New adaptation for gymnasium
     # Reset takes a seed as input and returns the observation 
-    def reset(self, **kwargs):
+    def reset(self, wind_direction=None, **kwargs):
         obs = super().reset()
 
         # Initialize renderable directions
+        if wind_direction is not None:
+            self.wind_process.wind_direction = wind_direction
         #self.wind_process.wind_direction = 155 + (int(self.runs * (295-155)/8) % (295-155))
         
         # Update environment after reset (wind speed and direction are logged and used later, so this is necessary)
@@ -262,6 +264,11 @@ def get_lhs_env(
     if privileged:
         plt.scatter(mast_layout[0], mast_layout[1], marker='x')
     plt.axis('scaled')
+    # Add legend
+    plt.legend(['Turbines', 'Masts'])
+    # Remove axis ticks and numbers
+    plt.xticks([])
+    plt.yticks([])
     plt.savefig(f'data/layouts/{layout_name}_md{mast_distancing}.png')
     # plt.show()
     return env
