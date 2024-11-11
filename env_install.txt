@@ -1,3 +1,25 @@
+# To install SB3 environment install wind-farm-env and stable baselines (3.8/3.9)
+
+# To install Scaffolder environment install wind-farm-env and scaffolder (python 3.9)
+conda create -n scaffolder_wf2 python==3.9 
+conda activate scaffolder_wf2
+cd wind-farm-env/
+pip install ./dist/wind_farm_gym-0.0.3-py3-none-any.whl 
+pip install scikit-learn
+pip install gym
+    # At this point Floris gym works
+# Move to scaffolder and run pip install -r requirements.txt
+cd ../scaffolder
+pip install -r requirements.txt 
+pip install -e .
+pip install tensorflow_probability
+pip install gymnasium-robotics
+pip install -U "jax[cuda12]"
+pip install tensorflow[and-cuda]
+
+
+
+
 ml load <SADL modules>
 conda create env -p <path> python==3.9.19
 pip install -U "jax[cuda12]"
