@@ -5,3 +5,8 @@ RUNS = TRAINING_STEPS / EPISODE_LEN
 
 degree_step = 5
 evaluations = 360 // degree_step
+
+# Centered in 8.0 m/s, +- 6.0 m/s
+WIND_SPEED_RANGE = (2.0, 14.0)
+WIND_DIRECTION_CHANGE_RANGE = (-3,3)
+WIND_SPEED_CHANGE_RANGE = (-1,1)

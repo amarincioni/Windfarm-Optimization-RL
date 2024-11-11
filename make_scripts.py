@@ -11,11 +11,12 @@ class Experiment:
     changing_wind: bool
     mast_distancing: int
     noise: float
+    dynamic_mode: str = None
     training_steps: int = TRAINING_STEPS
 
 experiments = [
     # 4wt symmetric experiments
-    # Fixed wind experiments
+    #   -Fixed wind experiments
     Experiment("PPO", "4wt_symmetric", False, False, -1, 0.0),
     Experiment("PPO", "4wt_symmetric", True, False, 25, 0.0),
     Experiment("PPO", "4wt_symmetric", True, False, 50, 0.0),
@@ -23,7 +24,7 @@ experiments = [
     Experiment("PPO", "4wt_symmetric", True, False, 100, 0.0),
     Experiment("PPO", "4wt_symmetric", True, False, 125, 0.0),
     Experiment("PPO", "4wt_symmetric", True, False, 150, 0.0),
-    # Changing wind experiments
+    #   -Changing wind experiments
     Experiment("PPO", "4wt_symmetric", False, True, -1, 0.0),
     Experiment("PPO", "4wt_symmetric", True, True, 25, 0.0),
     Experiment("PPO", "4wt_symmetric", True, True, 50, 0.0),
@@ -31,28 +32,39 @@ experiments = [
     Experiment("PPO", "4wt_symmetric", True, True, 100, 0.0),
     Experiment("PPO", "4wt_symmetric", True, True, 125, 0.0),
     Experiment("PPO", "4wt_symmetric", True, True, 150, 0.0),
-    # lhs16 experiments
-    # Fixed wind experiments
-    Experiment("PPO", "lhs_env_nt16_md75_wb1500x1500", False, False, -1, 0.0),
-    Experiment("PPO", "lhs_env_nt16_md75_wb1500x1500", True, False, 200, 0.0),
-    Experiment("PPO", "lhs_env_nt16_md75_wb1500x1500", True, False, 250, 0.0),
-    Experiment("PPO", "lhs_env_nt16_md75_wb1500x1500", True, False, 300, 0.0),
-    # Changing wind experiments
-    Experiment("PPO", "lhs_env_nt16_md75_wb1500x1500", False, True, -1, 0.0),
-    Experiment("PPO", "lhs_env_nt16_md75_wb1500x1500", True, True, 200, 0.0),
-    Experiment("PPO", "lhs_env_nt16_md75_wb1500x1500", True, True, 250, 0.0),
-    Experiment("PPO", "lhs_env_nt16_md75_wb1500x1500", True, True, 300, 0.0),
     # lhs8 experiments
-    # Fixed wind experiments
+    #   -Fixed wind experiments
     Experiment("PPO", "lhs_env_nt8_md150_wb750x750", False, False, -1, 0.0),
     Experiment("PPO", "lhs_env_nt8_md150_wb750x750", True, False, 100, 0.0),
     Experiment("PPO", "lhs_env_nt8_md150_wb750x750", True, False, 150, 0.0),
     Experiment("PPO", "lhs_env_nt8_md150_wb750x750", True, False, 200, 0.0),
-    # Changing wind experiments
+    #   -Changing wind experiments
     Experiment("PPO", "lhs_env_nt8_md150_wb750x750", False, True, -1, 0.0),
     Experiment("PPO", "lhs_env_nt8_md150_wb750x750", True, True, 100, 0.0),
     Experiment("PPO", "lhs_env_nt8_md150_wb750x750", True, True, 150, 0.0),
     Experiment("PPO", "lhs_env_nt8_md150_wb750x750", True, True, 200, 0.0),
+    # lhs16 experiments
+    #   -Fixed wind experiments
+    Experiment("PPO", "lhs_env_nt16_md75_wb1500x1500", False, False, -1, 0.0),
+    Experiment("PPO", "lhs_env_nt16_md75_wb1500x1500", True, False, 200, 0.0),
+    Experiment("PPO", "lhs_env_nt16_md75_wb1500x1500", True, False, 250, 0.0),
+    Experiment("PPO", "lhs_env_nt16_md75_wb1500x1500", True, False, 300, 0.0),
+    #   -Changing wind experiments
+    Experiment("PPO", "lhs_env_nt16_md75_wb1500x1500", False, True, -1, 0.0),
+    Experiment("PPO", "lhs_env_nt16_md75_wb1500x1500", True, True, 200, 0.0),
+    Experiment("PPO", "lhs_env_nt16_md75_wb1500x1500", True, True, 250, 0.0),
+    Experiment("PPO", "lhs_env_nt16_md75_wb1500x1500", True, True, 300, 0.0),
+
+    # Dynamic mode experiments
+    # 4wt symmetric experiments
+    #   -Changing wind experiments
+    Experiment("PPO", "4wt_symmetric", False, True, -1, 0.0, "observation_points"),
+    Experiment("PPO", "4wt_symmetric", True, True, 25, 0.0, "observation_points"),
+    Experiment("PPO", "4wt_symmetric", True, True, 50, 0.0, "observation_points"),
+    Experiment("PPO", "4wt_symmetric", True, True, 75, 0.0, "observation_points"),
+    Experiment("PPO", "4wt_symmetric", True, True, 100, 0.0, "observation_points"),
+    Experiment("PPO", "4wt_symmetric", True, True, 125, 0.0, "observation_points"),
+    Experiment("PPO", "4wt_symmetric", True, True, 150, 0.0, "observation_points"),
 
 ]
     
@@ -82,6 +94,7 @@ for experiment in experiments:
         changing_wind=changing_wind_option,#
         mast_distancing=experiment.mast_distancing,
         noise=experiment.noise,
+        dynamic_mode=experiment.dynamic_mode,
     )
 
     experiment_name = get_experiment_name(
@@ -91,6 +104,7 @@ for experiment in experiments:
         changing_wind=experiment.changing_wind,
         mast_distancing=experiment.mast_distancing,
         noise=experiment.noise,
+        dynamic_mode=experiment.dynamic_mode,
         training_steps=experiment.training_steps,
     )
     with open("scripts/" + experiment_name + ".slurm", "w") as f:
