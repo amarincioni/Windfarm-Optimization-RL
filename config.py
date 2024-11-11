@@ -5,3 +5,6 @@ RUNS = TRAINING_STEPS / EPISODE_LEN
 
 degree_step = 5
 evaluations = 360 // degree_step
+
+N_ENVS_PARALLEL = 16
+EVAL_PER_RUN = 20

@@ -27,13 +27,13 @@ else:
 
 # Initialize wandb run
 experiment_name = get_experiment_name(args.agent_name, args.env_name, args.privileged, args.mast_distancing, args.changing_wind, args.noise, TRAINING_STEPS)
-run, callback = initialize_wandb_run(experiment_name, args.agent_name, args.env_name, args.privileged, args.mast_distancing, args.changing_wind, args.noise, EVAL_REPS, env_fn=env_fn)
+run, callback = initialize_wandb_run(experiment_name, args.agent_name, args.env_name, args.privileged, args.mast_distancing, args.changing_wind, args.noise, EVAL_REPS, env_fn=env_fn, eval_freq=int(TRAINING_STEPS/EVAL_PER_RUN), n_envs=N_ENVS_PARALLEL)
 print(f"Experiment name: {experiment_name}")
 print(f"Evaluations: {EVAL_REPS}")
 print(f"Episode length: {EPISODE_LEN}")
 
 # Create the multiprocess environment
-env_list = [env_fn for _ in range(16)]
+env_list = [env_fn for _ in range(N_ENVS_PARALLEL)]
 env = SubprocVecEnv(env_list, start_method="fork")
 
 # Train the model

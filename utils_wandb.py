@@ -112,6 +112,26 @@ class VideoEvalCallback(BaseCallback):
         self.model.save(f"data/models/run_checkpoints/{self.experiment_name}/{self.run_id}/ckpt_end")
         pass
 
+class WandbLogBestCallback(BaseCallback):
+    def __init__(self, verbose: int = 0):
+        super().__init__(verbose)
+
+    def _on_training_start(self) -> None:
+        pass
+
+    def _on_rollout_start(self) -> None:
+        pass
+
+    def _on_step(self) -> bool:
+        wandb.log({"eval/best_mean_reward": self.parent.best_mean_reward}) # TODO commit=False)
+        return True
+
+    def _on_rollout_end(self) -> None:
+        pass
+
+    def _on_training_end(self) -> None:
+        pass
+
 def initialize_wandb_run(
         experiment_name, 
         agent, 
@@ -123,6 +143,7 @@ def initialize_wandb_run(
         eval_reps,
         eval_freq=10000,
         env_fn=None,
+        n_envs=16,
         ):
     config = {
         "experiment_name": experiment_name,
@@ -133,6 +154,7 @@ def initialize_wandb_run(
         "mast_distancing": mast_distancing,
         "noise": noise,
         "eval_reps": eval_reps,
+        "n_envs": n_envs,
     }
     run = wandb.init(
         project="thesis_tests",
@@ -147,16 +169,19 @@ def initialize_wandb_run(
         model_save_path=f"models/{run.id}",
         verbose=2,
     )
+
+    real_eval_freq = max(eval_freq//n_envs, 1)
+
     video_eval_callback = VideoEvalCallback(
-        freq=eval_freq,
+        freq=real_eval_freq,
         eval_reps=eval_reps,
         experiment_name=experiment_name,
         run_id=run.id,
         env_fn=env_fn,
     )
-    eval_callback = EvalCallback(env_fn(), best_model_save_path=f"models/{run.id}/",
-        log_path=f"models/{run.id}/", eval_freq=eval_freq,
-        deterministic=True, render=False)
+    eval_callback = EvalCallback(env_fn(), best_model_save_path=f"data/models/run_checkpoints/{experiment_name}/{run.id}/",
+        log_path=f"data/models/run_checkpoints/{experiment_name}/{run.id}/", eval_freq=real_eval_freq,
+        deterministic=True, render=False, callback_on_new_best=WandbLogBestCallback())
     callbacks = CallbackList([wandb_callback, video_eval_callback, eval_callback])
 
     return run, callbacks
