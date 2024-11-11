@@ -27,7 +27,8 @@ if __name__ == "__main__":
 
     if "4wt_symmetric" in args.env_name:
         env_fn = lambda: get_4wt_symmetric_env(episode_length=EPISODE_LEN, privileged=args.privileged, changing_wind=args.changing_wind, mast_distancing=args.mast_distancing, noise=args.noise, dynamic_mode=args.dynamic_mode)
-        eval_env_fn = lambda: get_4wt_symmetric_env(load_pyglet_visualization=True, episode_length=EPISODE_LEN, privileged=args.privileged, changing_wind=args.changing_wind, mast_distancing=args.mast_distancing, noise=args.noise, dynamic_mode=args.dynamic_mode)
+        #eval_env_fn = lambda: get_4wt_symmetric_env(load_pyglet_visualization=True, episode_length=EPISODE_LEN, privileged=args.privileged, changing_wind=args.changing_wind, mast_distancing=args.mast_distancing, noise=args.noise, dynamic_mode=args.dynamic_mode)
+        eval_env_fn = env_fn
     elif "lhs" in args.env_name:
         env_fn = lambda: get_lhs_env(layout_name=args.env_name, episode_length=EPISODE_LEN, privileged=args.privileged, changing_wind=args.changing_wind, mast_distancing=args.mast_distancing, noise=args.noise, dynamic_mode=args.dynamic_mode)
         eval_env_fn = env_fn
@@ -44,7 +45,7 @@ if __name__ == "__main__":
     print(f"Episode length: {EPISODE_LEN}")
 
     # Create the multiprocess environment
-    env_list = [env_fn for _ in range(4)]
+    env_list = [env_fn for _ in range(N_ENVS_PARALLEL)]
     env = SubprocVecEnv(env_list, start_method="fork")
     # env = env_list[0]()
     

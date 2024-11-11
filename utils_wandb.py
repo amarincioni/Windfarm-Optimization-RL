@@ -153,6 +153,26 @@ class VideoEvalCallback(BaseCallback):
         self.model.save(f"data/models/run_checkpoints/{self.experiment_name}/{self.run_id}/ckpt_end")
         pass
 
+class WandbLogBestCallback(BaseCallback):
+    def __init__(self, verbose: int = 0):
+        super().__init__(verbose)
+
+    def _on_training_start(self) -> None:
+        pass
+
+    def _on_rollout_start(self) -> None:
+        pass
+
+    def _on_step(self) -> bool:
+        wandb.log({"eval/best_mean_reward": self.parent.best_mean_reward}) # TODO commit=False)
+        return True
+
+    def _on_rollout_end(self) -> None:
+        pass
+
+    def _on_training_end(self) -> None:
+        pass
+
 def initialize_wandb_run(
         experiment_name, 
         agent, 
@@ -192,8 +212,11 @@ def initialize_wandb_run(
         model_save_path=f"models/{run.id}",
         verbose=2,
     )
+
+    real_eval_freq = max(eval_freq//n_envs, 1)
+
     video_eval_callback = VideoEvalCallback(
-        freq=eval_freq,
+        freq=real_eval_freq,
         eval_reps=eval_reps,
         experiment_name=experiment_name,
         run_id=run.id,

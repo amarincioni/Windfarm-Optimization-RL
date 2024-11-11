@@ -75,19 +75,27 @@ for experiment in experiments:
     changing_wind_option = "--changing_wind" if experiment.changing_wind else ""
 
     # Set experiment duration
-    if "4wt_symmetric" in experiment.env_name:
+    if True:
+        node_type = "gpu-short"
+        days = 0
+        hours = "04"
+    elif "4wt_symmetric" in experiment.env_name:
         node_type = "gpu-medium"
         days = 1
+        hours = "00"
     elif "nt16" in experiment.env_name:
         node_type = "gpu-long"
         days = 4
+        hours = "00"
     elif "nt8" in experiment.env_name:
         node_type = "gpu-long"
         days = 3
+        hours = "00"
 
     script_txt = base_slurm_script.format(
         node_type=node_type,
         days=days,
+        hours=hours,
         agent_name=experiment.agent_name,
         env_name=experiment.env_name,
         privileged=privileged_option,#
