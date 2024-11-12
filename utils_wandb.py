@@ -8,6 +8,7 @@ import tensorflow as tf
 import os
 import time
 from wind_processes import SetSequenceWindProcess
+import multiprocessing
 
 class VideoEvalCallback(BaseCallback):
     def __init__(self, freq=1000, eval_reps=10, experiment_name="", run_id="", verbose: int = 0, env_fn=None):
@@ -26,6 +27,8 @@ class VideoEvalCallback(BaseCallback):
         self.fixed_trajectory_eval_env = env_fn()
 
         self.n_logged = 0
+
+        self.pool = multiprocessing.Pool(16)
 
         self.wind_direction_lists = np.load(f"data/eval/wind_directions.npy")
         self.wind_speed_lists = np.load(f"data/eval/wind_speeds.npy")
@@ -59,6 +62,7 @@ class VideoEvalCallback(BaseCallback):
         
         if self.num_timesteps >= (self.n_logged * self.freq):
             print("Running evaluation")
+            t0 = time.time()
             
             env = self.fixed_trajectory_eval_env
 
@@ -84,7 +88,9 @@ class VideoEvalCallback(BaseCallback):
                     #     video.append(np.zeros_like(video[0]))
                     if terminated or truncated:
                         break
-            
+            t_after_video = time.time()
+
+            self.eval_reps = 0
             for i in range(self.eval_reps):
                 # print(f"Running evaluation {i}")
                 # Each evaluation runs a fixed wind sequence
@@ -104,6 +110,10 @@ class VideoEvalCallback(BaseCallback):
                     # tins.append(time.time()-t_in)
                     if terminated or truncated:
                         break
+                if False:
+                    results = [get_env_rewards(env, self.model, SetSequenceWindProcess(self.wind_speed_lists[i], self.wind_direction_lists[i])) for i in range(10)]
+                    total_power_rollout = np.array([r[1] for r in results]).sum(axis=1)
+                    total_reward_rollout = np.array([r[0] for r in results]).sum(axis=1)
                 # print(f"Rollout {i} took {time.time()-t0} seconds")
                 # plt.plot(tins)
                 # plt.show()
@@ -137,6 +147,11 @@ class VideoEvalCallback(BaseCallback):
             self.n_logged += 1
             print(f"Logged {self.n_logged} times")
 
+            # Print time elapsed
+            time_elapsed = time.time()-t0
+            time_elapsed_no_video = time.time()-t_after_video
+            print(f"Evaluation took {time_elapsed} seconds ({time_elapsed/self.eval_reps:.2f} per rollout and {time_elapsed/EPISODE_LEN/self.eval_reps:.2f} per timestep)")
+            print(f"Evaluation took {time_elapsed_no_video} seconds without video ({time_elapsed_no_video/self.eval_reps:.2f} per rollout and {time_elapsed_no_video/EPISODE_LEN/self.eval_reps:.2f} per timestep)")
             # Reset env (may be unnecessary)
             obs, info = env.reset()
 
@@ -152,6 +167,22 @@ class VideoEvalCallback(BaseCallback):
     def _on_training_end(self) -> None:
         self.model.save(f"data/models/run_checkpoints/{self.experiment_name}/{self.run_id}/ckpt_end")
         pass
+
+def get_env_rewards(env, model, wind_process):
+    EPISODE_LEN = env.episode_length
+    env.wind_process = wind_process
+    # Run a rollout saving a video and performance
+    total_rewards = np.zeros((EPISODE_LEN,))
+    total_powers = np.zeros((EPISODE_LEN,))
+    obs, info = env.reset()
+    for j in range(EPISODE_LEN):
+        action, _states = model.predict(obs)
+        obs, reward, terminated, truncated, info = env.step(action)
+        total_rewards[j] = reward
+        total_powers[j] = info["power_output"]
+        if terminated or truncated:
+            break
+    return total_rewards, total_powers
 
 class WandbLogBestCallback(BaseCallback):
     def __init__(self, verbose: int = 0):

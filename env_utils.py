@@ -32,6 +32,7 @@ def get_4wt_symmetric_env(
         load_pyglet_visualization=False,
         floris_path="myfloris.json",
         dynamic_mode=None,
+        parallel_dynamic_computations=False,
     ):
     turbine_layout = ([0, 250, 0, 250], [0, 0, 250, 250])
     w, h = np.max(turbine_layout, axis=1)
@@ -54,8 +55,9 @@ def get_4wt_symmetric_env(
         action_representation=action_representation,
         observation_noise=noise,
         verbose=verbose,
-        load_pyglet_visualization=load_pyglet_visualization,
         update_rule=dynamic_mode,
+        load_pyglet_visualization=load_pyglet_visualization,
+        parallel_dynamic_computations=parallel_dynamic_computations,
     )
 
     return env

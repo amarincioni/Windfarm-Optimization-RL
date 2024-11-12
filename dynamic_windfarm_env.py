@@ -28,10 +28,11 @@ class DynamicPriviegedWindFarmEnv(WindFarmEnv):
         action_representation='wind',
         observation_noise=0.0,
         verbose=False,
-        load_pyglet_visualization=False,
         update_rule=None,
         momentum_alpha=0.95,
         momentum_beta=1,
+        load_pyglet_visualization=False,
+        parallel_dynamic_computations=False,
         ):
         
         # Setting the wind state
@@ -70,6 +71,7 @@ class DynamicPriviegedWindFarmEnv(WindFarmEnv):
         self.update_rule = update_rule
         self.momentum_alpha = momentum_alpha
         self.momentum_beta = momentum_beta
+        self.parallel_dynamic_computations = parallel_dynamic_computations
 
         # Defines the points to sample the wind from 
         # This is used to get the wind state from the steady state flow field of floris
@@ -83,6 +85,7 @@ class DynamicPriviegedWindFarmEnv(WindFarmEnv):
         self.steady_state_plot = None
         self.dynamic_state = None
         self.dynamic_state_plot = None
+        assert self.update_rule in [None, 'momentum', 'observation_points'], "Update rule not recognized"
         # Should we provide a wind history to the observation for the 
         # dynamic state?
         # self.wind_direction_history = []
@@ -95,14 +98,24 @@ class DynamicPriviegedWindFarmEnv(WindFarmEnv):
         self.op_dynamic_state_margin = 100
         self.observation_points = pd.DataFrame(columns=["x", "y", "z", "yaw", "represented_speed_u", "represented_speed_v", "represented_speed_w", "source", "t", "age"])
         self.wake_matrices = {}
-        self.wf_bounds = ((0, 0), np.max(self.turbine_layout, axis=1))
+        # mast and turbine take into account
+        if mast_layout is not None:
+            turbine_and_masts = np.concatenate((self.turbine_layout, self.mast_layout), axis=1)
+        else:
+            turbine_and_masts = self.turbine_layout
+        self.wf_bounds = ((0, 0), np.max(turbine_and_masts, axis=1))
+        print("Wind farm bounds", self.wf_bounds)
         self.t_power_log = [] # To correctly plot the power output
-        #self.pool = Pool(8)
+        if self.parallel_dynamic_computations:
+            self.pool = Pool(8)
         if self.verbose: print("Wind farm bounds", self.wf_bounds)
 
         # Size of the represented state
-        # Max side is 200
-        self.dynamic_state_shape = (50, 50)
+        # Max side is 50
+        if np.max(turbine_and_masts) < 500:
+            self.dynamic_state_shape = (50, 50)
+        else:
+            self.dynamic_state_shape = (100,100)
         x_len = self.wf_bounds[1][0] - self.wf_bounds[0][0] + 2*self.op_dynamic_state_margin
         y_len = self.wf_bounds[1][1] - self.wf_bounds[0][1] + 2*self.op_dynamic_state_margin
         self.len_ratio = min(self.dynamic_state_shape[0]/x_len, self.dynamic_state_shape[1]/y_len)
@@ -522,7 +535,6 @@ class DynamicPriviegedWindFarmEnv(WindFarmEnv):
                 sampling_points.append(np.vstack((np.arange(self.op_wake_matrix_horizon), ) * 3).T*d_pos + point)
         
         self.observation_points = pd.concat((self.observation_points, pd.DataFrame(new_ops)), ignore_index=True)
-
         
         sampling_points = np.array(sampling_points)
         # (N_TURBINES x OP_PER_TURBINE, OP_WAKE_HORIZON, 3) (5,20,3)
@@ -582,6 +594,7 @@ class DynamicPriviegedWindFarmEnv(WindFarmEnv):
         # Size of the wind farm
         (x_min, y_min), (x_max, y_max) = self.wf_bounds
         r = int(self.turbines[0].rotor_radius * self.len_ratio / self.op_per_turbine)
+        assert r > 0, "Radius is 0, probably caused by a too small dynamic state shape"    
         # For each observation point, apply a gaussian filter
         # Average of the gaussian filters is the dynamic state
         
@@ -599,53 +612,14 @@ class DynamicPriviegedWindFarmEnv(WindFarmEnv):
         # Something like a p-mean with high p could be better, to weigh the
         #   bigger reductions more, but this is a good start
         t0 = time.time()
-        # Jax is used here to speed up the computation
-        if False:
-            smooth_wake_shape = (int(x_max-x_min)+2*self.op_dynamic_state_margin, int(y_max-y_min)+2*self.op_dynamic_state_margin)
-            xyval = jnp.array([x, y, wind_speed_change]).T
-            temp = jnp.zeros(jnp.array(smooth_wake_shape) + 2*r)
-            smooth_wake = jnp.apply_along_axis(_op_get_gaussian_filter, 1, xyval, temp, r=r, smooth_wake_shape=smooth_wake_shape, margin=self.op_dynamic_state_margin)
-            smooth_wake = jnp.sum(smooth_wake, axis=0)
-            dynamic_state_speed = smooth_wake + jnp.ones_like(smooth_wake)*self.wind_process.wind_speed
-        elif False:
-            smooth_wake_shape = (int(x_max-x_min)+2*self.op_dynamic_state_margin, int(y_max-y_min)+2*self.op_dynamic_state_margin)
-            xyval = np.array([x, y, wind_speed_change]).T
-            smooth_wake = np.apply_along_axis(self._op_get_gaussian_filter, 1, xyval, r=r, smooth_wake_shape=smooth_wake_shape)
-            smooth_wake = np.sum(smooth_wake, axis=0)
-            dynamic_state_speed = smooth_wake + np.ones_like(smooth_wake)*self.wind_process.wind_speed    
-        elif False:
+        # Jax is used here to speed up the computation   
+        smooth_wake_shape = self.dynamic_state_shape
+        xyval = np.array([(x+self.op_dynamic_state_margin)*self.len_ratio, (y+self.op_dynamic_state_margin)*self.len_ratio, wind_speed_change]).T
+        if self.parallel_dynamic_computations:
             # Parallelized filter computation
-            smooth_wake_shape = self.dynamic_state_shape
-            xyval = np.array([(x+self.op_dynamic_state_margin)*self.len_ratio, (y+self.op_dynamic_state_margin)*self.len_ratio, wind_speed_change]).T
             smooth_wind_speed = self.pool.map(functools.partial(_op_get_gaussian_filter, r=r, smooth_wake_shape=smooth_wake_shape), xyval)
             smooth_wind_speed = np.sum(smooth_wind_speed, axis=0)
             dynamic_state_speed = smooth_wind_speed + np.ones_like(smooth_wind_speed)*self.wind_process.wind_speed
-        elif False:
-            # Parallelized filter computation
-            # but only parallelize the gaussian filter computation
-            # and vectorize the rest with numpy
-            smooth_wake_shape = self.dynamic_state_shape
-            xyval = np.array([(x+self.op_dynamic_state_margin)*len_ratio, (y+self.op_dynamic_state_margin)*len_ratio, wind_speed_change]).T
-            # Make len(x) cirlces of radius r, centered in (x, y)
-            Ax = np.arange(-r, int(smooth_wake_shape[0] + r))
-            Ay = np.arange(-r, int(smooth_wake_shape[1] + r))
-            Ax = np.tile(Ax, (len(x), 1))
-            Ay = np.tile(Ay, (len(x), 1))
-            Ax = Ax.T - xyval[:,0]
-            Ay = Ay.T - xyval[:,1]
-            A = Ax**2 + Ay[:,None]**2
-            circles = ((A - r**2) <= 0).astype(int)
-            circles = circles * wind_speed_change
-            # Parallelize over the last dimension of circles
-            circles = np.transpose(circles, (2, 1, 0))
-            circles = circles[:, r:-r, r:-r]
-            print("CIRCLES", circles.shape)
-
-            smooth_wake = self.pool.map(functools.partial(gaussian_filter, sigma=r), circles)
-            smooth_wake = np.sum(smooth_wake, axis=0)
-            dynamic_state_speed = smooth_wake + np.ones_like(smooth_wake)*self.wind_process.wind_speed    
-            print(dynamic_state_speed.shape, self.dynamic_state_shape)
-        elif False:
             # Computation not parallelized if it cant be used
             # but only parallelize the gaussian filter computation
             # and vectorize the rest with numpy
@@ -669,54 +643,10 @@ class DynamicPriviegedWindFarmEnv(WindFarmEnv):
             smooth_wake = np.array([gaussian_filter(c, sigma=r) for c in circles])
             smooth_wake = np.sum(smooth_wake, axis=0)
             dynamic_state_speed = smooth_wake + np.ones_like(smooth_wake)*self.wind_process.wind_speed  
-        elif True:
-            smooth_wake_shape = self.dynamic_state_shape
-            xyval = np.array([(x+self.op_dynamic_state_margin)*self.len_ratio, (y+self.op_dynamic_state_margin)*self.len_ratio, wind_speed_change]).T
-
+        else:
             wake_gaussians = _op_centered_gaussians(smooth_wake_shape, xyval[:,0], xyval[:,1], r, wind_speed_change)
             smooth_wake = np.sum(wake_gaussians, axis=0)
             dynamic_state_speed = smooth_wake + np.ones_like(smooth_wake)*self.wind_process.wind_speed
-        elif False:
-            smooth_wake_shape = self.dynamic_state_shape
-            xyval = np.array([x*len_ratio, y*len_ratio, wind_speed_change]).T
-            smooth_wake = np.apply_along_axis(self._op_get_gaussian_filter, 1, xyval, r=r, smooth_wake_shape=smooth_wake_shape)
-            smooth_wake = np.sum(smooth_wake, axis=0)
-            dynamic_state_speed = smooth_wake + np.ones_like(smooth_wake)*self.wind_process.wind_speed    
-        else:
-            smooth_wake_shape = (int(x_max-x_min)+2*self.op_dynamic_state_margin, int(y_max-y_min)+2*self.op_dynamic_state_margin)
-            Ax = np.arange(-smooth_wake_shape[0],smooth_wake_shape[1]+1)
-            Ay = np.arange(-smooth_wake_shape[1],smooth_wake_shape[1]+1)
-            Ax = np.tile(Ax, (len(x), 1))
-            Ay = np.tile(Ay, (len(x), 1))
-            # nx, lenfarm | ny, hfarm
-            # Offset by the center of the observation points
-            Ax = Ax.T - x
-            Ay = Ay.T - y
-            A = Ax**2 + Ay[:,None]**2
-            print("ASJA{PE", A.shape)
-            circles = ((A - r**2) <= 0).astype(int)
-            print("CIRCLES", circles.shape)
-            print("vals" ,mag.shape)
-            circles = circles * mag
-            import scipy
-            kernel = scipy.stats.norm.pdf(np.arange(-3*r, 3*r+1), 0, r)
-            #kernel = kernel * kernel[:,None]
-            # Circles is (x, y, n) and kernel is (l)
-            # We want to multiply every x, y by the kernel
-            #kernel = np.tile(kernel, (len(x), 1))
-            kernel = np.tile(kernel, (len(kernel), 1))
-            kernel = np.tile(kernel, (len(x), 1, 1)).transpose(1, 2, 0)
-            print(circles.shape, kernel.shape)
-            fcircles = np.fft.rfft(circles, axis=0)
-            fkernel = np.fft.rfft(kernel, axis=0)
-            print(fcircles.shape, fkernel.shape)
-            circles = np.fft.irfft(fcircles * fkernel)
-            print("CIRCLES2", circles.shape)
-            dynamic_state_speed = np.sum(circles, axis=-1)
-
-        # smooth_wake = np.apply_along_axis(self._op_get_gaussian_filter, 1, xyval, r=r, smooth_wake_shape=smooth_wake_shape)
-        # smooth_wake = np.sum(smooth_wake, axis=0)
-        # dynamic_state_speed = smooth_wake + np.ones_like(smooth_wake)*self.wind_process.wind_speed
         if self.verbose: print("Speed computation time", time.time()-t0)
         # This doesnt allow for points to overlap, overlappign points are overwritten,
         #   , here by the more recent points, but this wouldnt allow for wakes to cross 
@@ -734,58 +664,16 @@ class DynamicPriviegedWindFarmEnv(WindFarmEnv):
 
         # How does the wind direction change wrt freestream?
         t0 = time.time()
-        if False:
-            wind_direction_change = wind_direction_rad - np.deg2rad(self.wind_process.wind_direction)
-            smooth_wake_shape = (int(x_max-x_min)+2*self.op_dynamic_state_margin, int(y_max-y_min)+2*self.op_dynamic_state_margin)
-            xyval = np.array([x, y, wind_direction_change]).T
-            smooth_wind_direction = np.apply_along_axis(self._op_get_gaussian_filter, 1, xyval, r=r, smooth_wake_shape=smooth_wake_shape)
-            smooth_wind_direction = np.sum(smooth_wind_direction, axis=0)
-            dynamic_state_direction = smooth_wind_direction #+ np.ones_like(smooth_wind_direction)*np.deg2rad(self.wind_process.wind_direction)
-        elif False:
-            wind_direction_change = wind_direction_rad - np.deg2rad(self.wind_process.wind_direction)
-            smooth_wake_shape = self.dynamic_state_shape
-            xyval = np.array([x*len_ratio, y*len_ratio, wind_direction_change]).T
-            smooth_wind_direction = np.apply_along_axis(self._op_get_gaussian_filter, 1, xyval, r=r, smooth_wake_shape=smooth_wake_shape)
-            smooth_wind_direction = np.sum(smooth_wind_direction, axis=0)
-            dynamic_state_direction = smooth_wind_direction #+ np.ones_like(smooth_wind_direction)*np.deg2rad(self.wind_process.wind_direction)
-        elif False:
-            # parallelized
-            wind_direction_change = (wind_direction - self.wind_process.wind_direction+180)%360 - 180
-            smooth_wake_shape = self.dynamic_state_shape
-            xyval = np.array([(x+self.op_dynamic_state_margin)*self.len_ratio, (y+self.op_dynamic_state_margin)*self.len_ratio, wind_direction_change]).T
+        wind_direction_change = (wind_direction - self.wind_process.wind_direction+180)%360 - 180
+        smooth_wake_shape = self.dynamic_state_shape
+        xyval = np.array([(x+self.op_dynamic_state_margin)*self.len_ratio, (y+self.op_dynamic_state_margin)*self.len_ratio, wind_direction_change]).T
+        if self.parallel_dynamic_computations:
+            # Parallelized
             smooth_wind_direction = self.pool.map(functools.partial(_op_get_gaussian_filter, r=r, smooth_wake_shape=smooth_wake_shape), xyval)
             smooth_wind_direction = np.sum(smooth_wind_direction, axis=0)
             dynamic_state_direction = smooth_wind_direction + np.ones_like(smooth_wind_direction)*np.deg2rad(self.wind_process.wind_direction)
-        elif False:
-            # Computation not parallelized if it cant be used
-            # but only parallelize the gaussian filter computation
-            # and vectorize the rest with numpy
-            wind_direction_change = (wind_direction - self.wind_process.wind_direction+180)%360 - 180
-            smooth_wake_shape = self.dynamic_state_shape
-            xyval = np.array([(x+self.op_dynamic_state_margin)*self.len_ratio, (y+self.op_dynamic_state_margin)*self.len_ratio, wind_direction_change]).T
-            # Make len(x) cirlces of radius r, centered in (x, y)
-            Ax = np.arange(-r, int(smooth_wake_shape[0] + r))
-            Ay = np.arange(-r, int(smooth_wake_shape[1] + r))
-            Ax = np.tile(Ax, (len(x), 1))
-            Ay = np.tile(Ay, (len(x), 1))
-            Ax = Ax.T - xyval[:,0]
-            Ay = Ay.T - xyval[:,1]
-            A = Ax**2 + Ay[:,None]**2
-            circles = ((A - r**2) <= 0).astype(int)
-            circles = circles * wind_speed_change
-
-            circles = np.transpose(circles, (2, 1, 0))
-            circles = circles[:, r:-r, r:-r]
-
-            # smooth_wake = self.pool.map(functools.partial(gaussian_filter, sigma=r), circles)
-            smooth_wind_direction = np.array([gaussian_filter(c, sigma=r) for c in circles])
-            smooth_wind_direction = np.sum(smooth_wind_direction, axis=0)
-            dynamic_state_direction = smooth_wind_direction + np.ones_like(smooth_wind_direction)*np.deg2rad(self.wind_process.wind_direction)
-        elif True:
-            wind_direction_change = (wind_direction - self.wind_process.wind_direction+180)%360 - 180
-            smooth_wake_shape = self.dynamic_state_shape
-            xyval = np.array([(x+self.op_dynamic_state_margin)*self.len_ratio, (y+self.op_dynamic_state_margin)*self.len_ratio, wind_speed_change]).T
-
+        else:
+            # Vectorized (just a gaussian, no gaussian filter)
             wake_gaussians = _op_centered_gaussians(smooth_wake_shape, xyval[:,0], xyval[:,1], r, wind_direction_change)
             smooth_wind_direction = np.sum(wake_gaussians, axis=0)
             dynamic_state_direction = smooth_wind_direction + np.ones_like(smooth_wind_direction)*np.deg2rad(self.wind_process.wind_direction)
