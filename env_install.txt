@@ -59,3 +59,8 @@ pyglet.options["headless"] = True
 
 
 conda install -c conda-forge libstdcxx-ng
+
+
+# # #
+New dependencies
+pip install jax jaxlib

@@ -5,6 +5,6 @@ models/
 conda_envs/
 wind-farm-env/
 scripts/output/
+data/models/
 **.ZoneIdentifier
 **.pyc
-!data/models/

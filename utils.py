@@ -5,8 +5,9 @@ def get_circle_idxs(r):
     dists = np.sqrt(A[:,None] + A)
     return ((dists-r)<=0).astype(int)
 
-def get_experiment_name(agent_name, env_name, privileged, mast_distancing, changing_wind, noise, dynamic_mode, training_steps):
-    name = f"{agent_name}_{env_name}"
+def get_experiment_name(agent_name, env_name, privileged, mast_distancing, changing_wind, noise, dynamic_mode, training_steps, experiment_name_prefix=""):
+    name = experiment_name_prefix + "_" if experiment_name_prefix != "" else ""
+    name += f"{agent_name}_{env_name}"
     if dynamic_mode is not None:
         name += f"_{dynamic_mode}"
     if privileged:
@@ -56,7 +57,10 @@ echo "Reached working directory $CWD"
 echo "[$SHELL] Using GPU: "$CUDA_VISIBLE_DEVICES
 
 ### Actual experiment script
-python run_experiment.py --agent_name {agent_name} --env_name {env_name} {privileged} {changing_wind} --mast_distancing {mast_distancing} --noise {noise} --dynamic_mode {dynamic_mode}
+python run_experiment.py --agent_name {agent_name} --env_name {env_name} {privileged} {changing_wind} \
+--mast_distancing {mast_distancing} --noise {noise} --dynamic_mode {dynamic_mode} \
+--learning_rate {learning_rate} --batch_size {batch_size} --n_steps {n_steps} \
+--experiment_name_prefix "{experiment_name_prefix}"
 
 echo "#### Finished experiment :)"
 DATE=$(date)

@@ -28,8 +28,6 @@ class VideoEvalCallback(BaseCallback):
 
         self.n_logged = 0
 
-        self.pool = multiprocessing.Pool(16)
-
         self.wind_direction_lists = np.load(f"data/eval/wind_directions.npy")
         self.wind_speed_lists = np.load(f"data/eval/wind_speeds.npy")
         assert len(self.wind_speed_lists) >= self.eval_reps, "Not enough wind sequences"
@@ -47,7 +45,7 @@ class VideoEvalCallback(BaseCallback):
         self.video_log_wind_speeds = np.ones_like(self.video_log_wind_directions) * 8.0
 
         if not self.fixed_trajectory_eval_env.changing_wind:
-            self.wind_direction_lists = np.ones_like(self.wind_direction_lists) * self.wind_direction_lists[:, 0]
+            self.wind_direction_lists = np.tile(self.wind_direction_lists[:,0], (self.wind_direction_lists.shape[1], 1)).T
 
         # Initialize folders for logging the model weights periodically
         os.makedirs(os.path.dirname(f"data/models/run_checkpoints/{self.experiment_name}"), exist_ok=True)
@@ -109,10 +107,6 @@ class VideoEvalCallback(BaseCallback):
                     # tins.append(time.time()-t_in)
                     if terminated or truncated:
                         break
-                if False:
-                    results = [get_env_rewards(env, self.model, SetSequenceWindProcess(self.wind_speed_lists[i], self.wind_direction_lists[i])) for i in range(10)]
-                    total_power_rollout = np.array([r[1] for r in results]).sum(axis=1)
-                    total_reward_rollout = np.array([r[0] for r in results]).sum(axis=1)
                 # print(f"Rollout {i} took {time.time()-t0} seconds")
                 # plt.plot(tins)
                 # plt.show()

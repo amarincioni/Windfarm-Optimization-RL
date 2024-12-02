@@ -3,7 +3,7 @@ from utils import get_experiment_name
 from utils_wandb import initialize_wandb_run
 from config import *
 
-from stable_baselines3 import PPO
+from stable_baselines3 import PPO, A2C, SAC#, TRPO
 from stable_baselines3.common.vec_env import SubprocVecEnv, VecEnv
 import argparse
 
@@ -17,6 +17,10 @@ if __name__ == "__main__":
     parser.add_argument("--mast_distancing", type=int, help="Sets mast distancing")
     parser.add_argument("--noise", type=float, help="Sets noise in observations")
     parser.add_argument("--dynamic_mode", type=str, help="Sets dynamic mode")
+    parser.add_argument("--experiment_name_prefix", type=str, default="", help="Sets experiment name prefix")
+    parser.add_argument("--learning_rate", type=float, default=0.0003, help="Sets learning rate")
+    parser.add_argument("--batch_size", type=int, default=64, help="Sets batch size")
+    parser.add_argument("--n_steps", type=int, default=1024, help="Sets n_steps")
     #parser.add_argument("--load_pyglet", thelp="Enables the logging of videos and loads pyglet", action="store_true")
     args = parser.parse_args()
     print(args)
@@ -40,7 +44,7 @@ if __name__ == "__main__":
 
     # Initialize wandb run
     eval_freq = 50000 # 20 logs for 1000000 steps
-    experiment_name = get_experiment_name(args.agent_name, args.env_name, args.privileged, args.mast_distancing, args.changing_wind, args.noise, args.dynamic_mode, TRAINING_STEPS)
+    experiment_name = get_experiment_name(args.agent_name, args.env_name, args.privileged, args.mast_distancing, args.changing_wind, args.noise, args.dynamic_mode, TRAINING_STEPS, experiment_name_prefix=args.experiment_name_prefix)
     run, callback = initialize_wandb_run(experiment_name, args.agent_name, args.env_name, args.privileged, args.mast_distancing, args.changing_wind, args.noise, args.dynamic_mode, EVAL_REPS, env_fn=eval_env_fn, eval_freq=eval_freq)
     print(f"Experiment name: {experiment_name}")
     print(f"Evaluations: {EVAL_REPS}")
@@ -53,27 +57,31 @@ if __name__ == "__main__":
     env = env_list[0]()
     
     # Train the model
-    model = PPO("MlpPolicy", env, verbose=1, tensorboard_log=f"runs/{run.id}",
-        learning_rate=3e-5, n_steps=512, batch_size=64, n_epochs=20, gamma=0.99, 
-        # gae_lambda=0.9, clip_range=0.4, vf_coef=0.5, ent_coef=0.0, max_grad_norm=0.5, 
-        # sde_sample_freq=4, use_sde=True
-    )
-#     normalize: true
-#   n_envs: 8
-#   n_timesteps: !!float 1e6
-#   policy: 'MlpPolicy'
-#   batch_size: 64
-#   n_steps: 512
-#   gamma: 0.99
-#   gae_lambda: 0.9
-#   n_epochs: 20
-#   ent_coef: 0.0
-#   sde_sample_freq: 4
-#   max_grad_norm: 0.5
-#   vf_coef: 0.5
-#   learning_rate: !!float 3e-5
-#   use_sde: True
-#   clip_range: lin_0.4
+    if args.agent_name == "PPO":
+        model = PPO("MlpPolicy", env, verbose=1, tensorboard_log=f"runs/{run.id}", 
+            learning_rate=args.learning_rate, n_steps=args.n_steps, batch_size=args.batch_size,
+            # Small model
+            #policy_kwargs={"net_arch": [dict(pi=[32, 32], vf=[32, 32])]}
+            vf_coef=0.01,
+        )
+    elif args.agent_name == "A2C":
+        model = A2C("MlpPolicy", env, tensorboard_log=f"runs/{run.id}", 
+            #learning_rate=args.learning_rate, n_steps=args.n_steps, batch_size=args.batch_size,
+            # Small model
+            #policy_kwargs={"net_arch": [dict(pi=[32, 32], vf=[32, 32])]}
+        )
+    elif args.agent_name == "SAC":
+        model = SAC("MlpPolicy", env, tensorboard_log=f"runs/{run.id}", 
+            #learning_rate=args.learning_rate, n_steps=args.n_steps, batch_size=args.batch_size,
+            # Small model
+            #policy_kwargs={"net_arch": [dict(pi=[32, 32], vf=[32, 32])]}
+        )
+    elif args.agent_name == "TRPO":
+        model = TRPO("MlpPolicy", env, tensorboard_log=f"runs/{run.id}", 
+            #learning_rate=args.learning_rate, n_steps=args.n_steps, batch_size=args.batch_size,
+            # Small model
+            #policy_kwargs={"net_arch": [dict(pi=[32, 32], vf=[32, 32])]}
+        )
     model.learn(total_timesteps=TRAINING_STEPS, callback=callback, progress_bar=True)
     print("Training done")
 
