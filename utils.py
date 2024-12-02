@@ -62,3 +62,82 @@ echo "#### Finished experiment :)"
 DATE=$(date)
 echo "It is now $DATE"
 """
+
+##### Evaluation utilities #####
+
+import numpy as np
+from config import *
+from tqdm import tqdm
+from wind_processes import SetSequenceWindProcess
+from PIL import Image
+
+# Evaluation wind
+wind_directions = np.load("data/eval/wind_directions.npy")
+wind_speeds = np.load("data/eval/wind_speeds.npy")
+fixed_wind_directions = [[wind_directions[i,0] for j in range(len(wind_directions[0]))]for i in range(len(wind_directions))]
+fixed_wind_speeds = [[wind_speeds[i,0] for j in range(len(wind_speeds[0]))]for i in range(len(wind_speeds))]
+
+# List from 270        
+render_wind_directions = np.concatenate((
+            np.ones((10))*270,
+            np.linspace(270, 250, 20),
+            np.linspace(250, 290, 40),
+            np.linspace(290, 250, 20),
+            np.linspace(250, 270, 11),
+        ))
+render_wind_speeds = np.ones_like(render_wind_directions) * 8.0
+
+# Render for fixed wind environment
+fw_render_speed = np.ones_like(render_wind_directions) * 8.0
+fw_render_direction = np.ones_like(render_wind_directions) * 270.0
+
+def evaluate_model(env, agent_fn, wind_directions=wind_directions, wind_speeds=wind_speeds, EVAL_REPS=EVAL_REPS, EPISODE_LEN=EPISODE_LEN):
+    total_rewards = np.zeros((EVAL_REPS, EPISODE_LEN))
+    total_powers = np.zeros((EVAL_REPS, EPISODE_LEN))
+    for i in tqdm.tqdm(range(EVAL_REPS)):
+        env.wind_process = SetSequenceWindProcess(wind_directions=wind_directions[i], wind_speeds=wind_speeds[i])
+        env._np_random, env._seed = env.seed(0)
+        obs, info = env.reset()
+        for j in range(EPISODE_LEN):
+            action = agent_fn(env, obs)
+            obs, reward, terminated, truncated, info = env.step(action)
+
+            total_rewards[i, j] = reward
+            total_powers[i, j] = info["power_output"]
+
+            if terminated or truncated:
+                break
+        print("Episode {} finished with reward {}".format(i, np.sum(total_rewards[i])))
+        print("Episode {} finished with power {}".format(i, np.sum(total_powers[i])))
+        env.reset()
+    return total_rewards, total_powers
+
+def render_model(env, agent_fn, wind_directions=render_wind_directions, wind_speeds=render_wind_speeds, EPISODE_LEN=EPISODE_LEN):
+    env.wind_process = SetSequenceWindProcess(wind_speeds=wind_speeds, wind_directions=wind_directions)
+    obs, info = env.reset()
+    video = []
+    for j in range(EPISODE_LEN):
+        action = agent_fn(env, obs)
+        obs, reward, terminated, truncated, info = env.step(action)
+        f = env.render(mode="rgb_array")
+        video.append(f)
+    video = [Image.fromarray(img) for img in video]
+    return video
+
+def get_propSR_action(agent):
+    return lambda env, obs: agent.predict(env.wind_process.wind_direction, env.yaws_from_wind)
+
+def get_noisy_propSR_action(agent):
+    return lambda env, obs: agent.predict(env.wind_process.wind_direction + np.random.normal(0, 5), env.yaws_from_wind)
+
+def get_model_action(model):
+    return lambda env, obs: model.predict(obs, deterministic=True)[0]
+
+def get_nondeterministic_model_action(model):
+    return lambda env, obs: model.predict(obs, deterministic=False)[0]
+
+def get_naive_action():
+    return lambda env, obs: 0
+
+def get_random_action():
+    return lambda env, obs: env.action_space.sample()

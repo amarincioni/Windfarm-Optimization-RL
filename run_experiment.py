@@ -27,8 +27,11 @@ if __name__ == "__main__":
 
     if "4wt_symmetric" in args.env_name:
         env_fn = lambda: get_4wt_symmetric_env(episode_length=EPISODE_LEN, privileged=args.privileged, changing_wind=args.changing_wind, mast_distancing=args.mast_distancing, noise=args.noise, dynamic_mode=args.dynamic_mode)
-        #eval_env_fn = lambda: get_4wt_symmetric_env(load_pyglet_visualization=True, episode_length=EPISODE_LEN, privileged=args.privileged, changing_wind=args.changing_wind, mast_distancing=args.mast_distancing, noise=args.noise, dynamic_mode=args.dynamic_mode)
-        eval_env_fn = env_fn
+        # Non parallel implementation is faster
+        eval_env_fn = lambda: get_4wt_symmetric_env(
+            load_pyglet_visualization=True, parallel_dynamic_computations=False,
+            episode_length=EPISODE_LEN, privileged=args.privileged, changing_wind=args.changing_wind, mast_distancing=args.mast_distancing, noise=args.noise, dynamic_mode=args.dynamic_mode)
+        # eval_env_fn = env_fn
     elif "lhs" in args.env_name:
         env_fn = lambda: get_lhs_env(layout_name=args.env_name, episode_length=EPISODE_LEN, privileged=args.privileged, changing_wind=args.changing_wind, mast_distancing=args.mast_distancing, noise=args.noise, dynamic_mode=args.dynamic_mode)
         eval_env_fn = env_fn
@@ -39,18 +42,38 @@ if __name__ == "__main__":
     eval_freq = 50000 # 20 logs for 1000000 steps
     experiment_name = get_experiment_name(args.agent_name, args.env_name, args.privileged, args.mast_distancing, args.changing_wind, args.noise, args.dynamic_mode, TRAINING_STEPS)
     run, callback = initialize_wandb_run(experiment_name, args.agent_name, args.env_name, args.privileged, args.mast_distancing, args.changing_wind, args.noise, args.dynamic_mode, EVAL_REPS, env_fn=eval_env_fn, eval_freq=eval_freq)
-    
     print(f"Experiment name: {experiment_name}")
     print(f"Evaluations: {EVAL_REPS}")
     print(f"Episode length: {EPISODE_LEN}")
 
     # Create the multiprocess environment
+    N_ENVS_PARALLEL = 2
     env_list = [env_fn for _ in range(N_ENVS_PARALLEL)]
-    env = SubprocVecEnv(env_list, start_method="fork")
-    # env = env_list[0]()
+    # env = SubprocVecEnv(env_list, start_method="fork")
+    env = env_list[0]()
     
     # Train the model
-    model = PPO("MlpPolicy", env, verbose=1, tensorboard_log=f"runs/{run.id}")
+    model = PPO("MlpPolicy", env, verbose=1, tensorboard_log=f"runs/{run.id}",
+        learning_rate=3e-5, n_steps=512, batch_size=64, n_epochs=20, gamma=0.99, 
+        # gae_lambda=0.9, clip_range=0.4, vf_coef=0.5, ent_coef=0.0, max_grad_norm=0.5, 
+        # sde_sample_freq=4, use_sde=True
+    )
+#     normalize: true
+#   n_envs: 8
+#   n_timesteps: !!float 1e6
+#   policy: 'MlpPolicy'
+#   batch_size: 64
+#   n_steps: 512
+#   gamma: 0.99
+#   gae_lambda: 0.9
+#   n_epochs: 20
+#   ent_coef: 0.0
+#   sde_sample_freq: 4
+#   max_grad_norm: 0.5
+#   vf_coef: 0.5
+#   learning_rate: !!float 3e-5
+#   use_sde: True
+#   clip_range: lin_0.4
     model.learn(total_timesteps=TRAINING_STEPS, callback=callback, progress_bar=True)
     print("Training done")
 

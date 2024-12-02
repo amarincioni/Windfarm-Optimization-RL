@@ -104,18 +104,20 @@ class DynamicPriviegedWindFarmEnv(WindFarmEnv):
         else:
             turbine_and_masts = self.turbine_layout
         self.wf_bounds = ((0, 0), np.max(turbine_and_masts, axis=1))
-        print("Wind farm bounds", self.wf_bounds)
+        print("Wind farm bounds (min, max):", tuple(self.wf_bounds[0]), tuple(self.wf_bounds[1]))
         self.t_power_log = [] # To correctly plot the power output
         if self.parallel_dynamic_computations:
             self.pool = Pool(8)
-        if self.verbose: print("Wind farm bounds", self.wf_bounds)
 
-        # Size of the represented state
-        # Max side is 50
+        # Size of the representation of the dynamic state
         if np.max(turbine_and_masts) < 500:
             self.dynamic_state_shape = (50, 50)
-        else:
+        elif np.max(turbine_and_masts) < 1000:
             self.dynamic_state_shape = (100,100)
+        else:
+            self.dynamic_state_shape = (150,150)
+        if self.update_rule is not None:
+            print("Dynamic state shape:", self.dynamic_state_shape)
         x_len = self.wf_bounds[1][0] - self.wf_bounds[0][0] + 2*self.op_dynamic_state_margin
         y_len = self.wf_bounds[1][1] - self.wf_bounds[0][1] + 2*self.op_dynamic_state_margin
         self.len_ratio = min(self.dynamic_state_shape[0]/x_len, self.dynamic_state_shape[1]/y_len)
@@ -401,12 +403,14 @@ class DynamicPriviegedWindFarmEnv(WindFarmEnv):
         #   for the RL agent
 
         # Code taken from original environment _get_state()
-        self.current_flow_points = self._flow_points()
-        if len(self.current_flow_points[0]) > 0:
-            self._current_flow = self.floris_interface.get_set_of_points(*self.current_flow_points)
+            # self.current_flow_points = self._flow_points()
+            # if len(self.current_flow_points[0]) > 0:
+            #     self._current_flow = self.floris_interface.get_set_of_points(*self.current_flow_points)
 
         # Now only used for non mast observations
         state = [self._get_measurement_point_data(d) for d in self.observed_variables if "mast_" not in d["name"]]
+
+        # print("State", state)	
 
         # Add the mast observations
         if self.update_rule == 'momentum':
@@ -416,14 +420,15 @@ class DynamicPriviegedWindFarmEnv(WindFarmEnv):
         else:
             raise NotImplementedError(f"Update rule {self.update_rule} not implemented")
         state.extend(mast_state)
+        # print("Mast state", mast_state)
 
         state = np.array([float(s) for s in state])
         # rescale and clip off
-        # if self._normalize_observations:
-        #     state = (np.array(state) - self.low) / self.state_delta
-        #     state = np.clip(state, np.zeros_like(self.low), np.ones_like(self.high))
-        # else:
-        #     state = np.clip(state, self.low, self.high)
+        if self._normalize_observations:
+            state = (np.array(state) - self.low) / self.state_delta
+            state = np.clip(state, np.zeros_like(self.low), np.ones_like(self.high))
+        else:
+            state = np.clip(state, self.low, self.high)
         
         return state
 

@@ -89,8 +89,7 @@ class VideoEvalCallback(BaseCallback):
                     if terminated or truncated:
                         break
             t_after_video = time.time()
-
-            self.eval_reps = 0
+    	    
             for i in range(self.eval_reps):
                 # print(f"Running evaluation {i}")
                 # Each evaluation runs a fixed wind sequence
