@@ -419,11 +419,11 @@ class DynamicPriviegedWindFarmEnv(WindFarmEnv):
 
         state = np.array([float(s) for s in state])
         # rescale and clip off
-        # if self._normalize_observations:
-        #     state = (np.array(state) - self.low) / self.state_delta
-        #     state = np.clip(state, np.zeros_like(self.low), np.ones_like(self.high))
-        # else:
-        #     state = np.clip(state, self.low, self.high)
+        if self._normalize_observations:
+            state = (np.array(state) - self.low) / self.state_delta
+            state = np.clip(state, np.zeros_like(self.low), np.ones_like(self.high))
+        else:
+            state = np.clip(state, self.low, self.high)
         
         return state
 
