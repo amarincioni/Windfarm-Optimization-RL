@@ -71,52 +71,54 @@ echo "It is now $DATE"
 
 import numpy as np
 from config import *
-from tqdm import tqdm
+import tqdm
 from wind_processes import SetSequenceWindProcess
 from PIL import Image
 
 # Evaluation wind
-wind_directions = np.load("data/eval/wind_directions.npy")
-wind_speeds = np.load("data/eval/wind_speeds.npy")
-fixed_wind_directions = [[wind_directions[i,0] for j in range(len(wind_directions[0]))]for i in range(len(wind_directions))]
-fixed_wind_speeds = [[wind_speeds[i,0] for j in range(len(wind_speeds[0]))]for i in range(len(wind_speeds))]
+EVAL_WIND_DIRECTIONS = np.load("data/eval/wind_directions.npy")
+EVAL_WIND_SPEEDS = np.load("data/eval/wind_speeds.npy")
+EVAL_FIXED_WIND_DIRECTIONS = [[EVAL_WIND_DIRECTIONS[i,0] for j in range(len(EVAL_WIND_DIRECTIONS[0]))]for i in range(len(EVAL_WIND_DIRECTIONS))]
+EVAL_FIXED_WIND_SPEEDS = [[EVAL_WIND_SPEEDS[i,0] for j in range(len(EVAL_WIND_SPEEDS[0]))]for i in range(len(EVAL_WIND_SPEEDS))]
 
 # List from 270        
-render_wind_directions = np.concatenate((
+EVAL_RENDER_WIND_DIRECTIONS = np.concatenate((
             np.ones((10))*270,
             np.linspace(270, 250, 20),
             np.linspace(250, 290, 40),
             np.linspace(290, 250, 20),
             np.linspace(250, 270, 11),
         ))
-render_wind_speeds = np.ones_like(render_wind_directions) * 8.0
+EVAL_RENDER_WIND_SPEEDS = np.ones_like(EVAL_RENDER_WIND_DIRECTIONS) * 8.0
 
 # Render for fixed wind environment
-fw_render_speed = np.ones_like(render_wind_directions) * 8.0
-fw_render_direction = np.ones_like(render_wind_directions) * 270.0
+EVAL_RENDER_FIXED_WIND_DIRECTIONS = np.ones_like(EVAL_RENDER_WIND_DIRECTIONS) * 270
+EVAL_RENDER_FIXED_WIND_SPEEDS = np.ones_like(EVAL_RENDER_WIND_DIRECTIONS) * 8.0
 
-def evaluate_model(env, agent_fn, wind_directions=wind_directions, wind_speeds=wind_speeds, EVAL_REPS=EVAL_REPS, EPISODE_LEN=EPISODE_LEN):
-    total_rewards = np.zeros((EVAL_REPS, EPISODE_LEN))
-    total_powers = np.zeros((EVAL_REPS, EPISODE_LEN))
-    for i in tqdm.tqdm(range(EVAL_REPS)):
-        env.wind_process = SetSequenceWindProcess(wind_directions=wind_directions[i], wind_speeds=wind_speeds[i])
-        env._np_random, env._seed = env.seed(0)
-        obs, info = env.reset()
-        for j in range(EPISODE_LEN):
-            action = agent_fn(env, obs)
-            obs, reward, terminated, truncated, info = env.step(action)
+def evaluate_model(env, agent_fn, wind_directions=EVAL_WIND_DIRECTIONS, wind_speeds=EVAL_WIND_SPEEDS, EVAL_REPS=EVAL_REPS, EPISODE_LEN=EPISODE_LEN, N_SEEDS=1, verbose=False):
+    total_rewards = np.zeros((N_SEEDS, EVAL_REPS, EPISODE_LEN))
+    total_powers = np.zeros((N_SEEDS, EVAL_REPS, EPISODE_LEN))
+    for seed in range(N_SEEDS):
+        for i in tqdm.tqdm(range(EVAL_REPS)):
+            env.wind_process = SetSequenceWindProcess(wind_directions=wind_directions[i], wind_speeds=wind_speeds[i])
+            env._np_random, env._seed = env.seed(seed)
+            obs, info = env.reset()
+            for j in range(EPISODE_LEN):
+                action = agent_fn(env, obs)
+                obs, reward, terminated, truncated, info = env.step(action)
 
-            total_rewards[i, j] = reward
-            total_powers[i, j] = info["power_output"]
+                total_rewards[seed, i, j] = reward
+                total_powers[seed, i, j] = info["power_output"]
 
-            if terminated or truncated:
-                break
-        print("Episode {} finished with reward {}".format(i, np.sum(total_rewards[i])))
-        print("Episode {} finished with power {}".format(i, np.sum(total_powers[i])))
-        env.reset()
+                if terminated or truncated:
+                    break
+            if verbose:
+                print("Episode {} finished with reward {}".format(i, np.sum(total_rewards[seed, i])))
+                print("Episode {} finished with power {}".format(i, np.sum(total_powers[seed, i])))
+            env.reset()
     return total_rewards, total_powers
 
-def render_model(env, agent_fn, wind_directions=render_wind_directions, wind_speeds=render_wind_speeds, EPISODE_LEN=EPISODE_LEN):
+def render_model(env, agent_fn, wind_directions=EVAL_RENDER_WIND_DIRECTIONS, wind_speeds=EVAL_RENDER_WIND_SPEEDS, EPISODE_LEN=EPISODE_LEN):
     env.wind_process = SetSequenceWindProcess(wind_speeds=wind_speeds, wind_directions=wind_directions)
     obs, info = env.reset()
     video = []

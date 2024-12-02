@@ -8,6 +8,7 @@ import tensorflow as tf
 import os
 import time
 from wind_processes import SetSequenceWindProcess
+from utils import *
 import multiprocessing
 
 class VideoEvalCallback(BaseCallback):
@@ -63,53 +64,22 @@ class VideoEvalCallback(BaseCallback):
             t0 = time.time()
             
             env = self.fixed_trajectory_eval_env
-
             EPISODE_LEN = env.episode_length
+
             # Run a rollout saving a video and performance
             total_rewards = np.zeros((self.eval_reps, EPISODE_LEN,))
             total_powers = np.zeros((self.eval_reps, EPISODE_LEN,))
 
             # Video rollout
             if env.load_pyglet_visualization:
-                env.wind_process = SetSequenceWindProcess(self.video_log_wind_speeds, self.video_log_wind_directions)
-                video = []
-
-                obs, info = env.reset()                
-                for j in range(EPISODE_LEN):
-                    action, _states = self.model.predict(obs)
-                    obs, reward, terminated, truncated, info = env.step(action)
-                    video.append(env.render(mode="rgb_array"))
-                    # try:
-                    #     video.append(env.render(mode="rgb_array"))
-                    # except:
-                    #     print("Failed to render")
-                    #     video.append(np.zeros_like(video[0]))
-                    if terminated or truncated:
-                        break
+                video = render_model(env, get_model_action(self.model), wind_directions=self.video_log_wind_directions, wind_speeds=self.video_log_wind_speeds, EPISODE_LEN=EPISODE_LEN)
             t_after_video = time.time()
-    	    
-            for i in range(self.eval_reps):
-                # print(f"Running evaluation {i}")
-                # Each evaluation runs a fixed wind sequence
-                # These sequences are generated as random walk
-                env.wind_process = SetSequenceWindProcess(self.wind_speed_lists[i], self.wind_direction_lists[i])
-                obs, info = env.reset()
-
-                # t0 = time.time()
-                # tins = []
-                for j in range(EPISODE_LEN):
-                    # t_in = time.time()
-                    # print(f"Running evaluation {i}, timestep {j}")
-                    action, _states = self.model.predict(obs)
-                    obs, reward, terminated, truncated, info = env.step(action)                    
-                    total_rewards[i,j] = reward
-                    total_powers[i,j] = info["power_output"]
-                    # tins.append(time.time()-t_in)
-                    if terminated or truncated:
-                        break
-                # print(f"Rollout {i} took {time.time()-t0} seconds")
-                # plt.plot(tins)
-                # plt.show()
+            video = [np.array(img) for img in video]
+            
+            total_rewards, total_powers = evaluate_model(env, get_model_action(self.model), EVAL_REPS=self.eval_reps, EPISODE_LEN=EPISODE_LEN, N_SEEDS=1, verbose=False)
+            assert total_rewards.shape[0] == 1, "Evaluation with multiple seeds not implemented" 
+            total_rewards = total_rewards[0]
+            total_powers = total_powers[0]
             # Get rollout sums
             total_power_rollout = np.sum(total_powers, axis=1)
             total_reward_rollout = np.sum(total_rewards, axis=1)
