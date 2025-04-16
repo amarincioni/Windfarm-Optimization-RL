@@ -57,7 +57,7 @@ echo "Reached working directory $CWD"
 echo "[$SHELL] Using GPU: "$CUDA_VISIBLE_DEVICES
 
 ### Actual experiment script
-python run_experiment.py --agent_name {agent_name} --env_name {env_name} {privileged} {changing_wind} \
+python train_ppo.py --agent_name {agent_name} --env_name {env_name} {privileged} {changing_wind} \
 --mast_distancing {mast_distancing} --noise {noise} --dynamic_mode {dynamic_mode} \
 --learning_rate {learning_rate} --batch_size {batch_size} --n_steps {n_steps} \
 --experiment_name_prefix "{experiment_name_prefix}" --training_steps {training_steps} \
@@ -70,7 +70,7 @@ DATE=$(date)
 echo "It is now $DATE"
 """
 
-base_terminal_script = """python run_experiment.py --agent_name {agent_name} --env_name {env_name} {privileged} {changing_wind} \
+base_terminal_script = """python train_ppo.py --agent_name {agent_name} --env_name {env_name} {privileged} {changing_wind} \
 --mast_distancing {mast_distancing} --noise {noise} --dynamic_mode {dynamic_mode} \
 --learning_rate {learning_rate} --batch_size {batch_size} --n_steps {n_steps} \
 --experiment_name_prefix "{experiment_name_prefix}" --training_steps {training_steps} \

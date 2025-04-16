@@ -1,11 +1,8 @@
 from utils import base_slurm_script, base_terminal_script, base_slurm_sh_script, get_experiment_name
 from config import TRAINING_STEPS
 import pathlib
-import numpy as np
 from dataclasses import dataclass
 import dataclasses
-import random
-
 import pandas as pd
 
 optimal_hp = pd.read_csv("data/eval/scores/hpsearch3_best_hp.csv")
@@ -27,7 +24,7 @@ class Experiment:
     mast_distancing: int
     dynamic_mode: str = None
     noise: float = 0.0
-    training_steps: int = TRAINING_STEPS / 10
+    training_steps: int = TRAINING_STEPS
     # Hyperparameter search
     experiment_name_prefix: str = ""
     learning_rate: float = 0.0001

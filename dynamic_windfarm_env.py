@@ -50,8 +50,6 @@ class DynamicPriviegedWindFarmEnv(WindFarmEnv):
             changing_wind=changing_wind,
         )
 
-        env_type = str(len(turbine_layout[0]))
-
         # Building the environment
         super().__init__(
             turbine_layout=turbine_layout, 
@@ -94,11 +92,6 @@ class DynamicPriviegedWindFarmEnv(WindFarmEnv):
         self.dynamic_state = None
         self.dynamic_state_plot = None
         assert self.update_rule in [None, 'momentum', 'observation_points'], "Update rule not recognized"
-        # Should we provide a wind history to the observation for the 
-        # dynamic state?
-        # self.wind_direction_history = []
-        # self.wind_speed_history = []
-        # self.wind_history_length = 10
 
         # Observation points update
         self.op_dynamic_state_margin = 100
@@ -142,7 +135,7 @@ class DynamicPriviegedWindFarmEnv(WindFarmEnv):
                     "bounds": self.wf_bounds,
                     "margin": self.op_dynamic_state_margin,
                 },
-                )
+            )
 
         # Double plot functionalities for debugging
         self.save_double_plot = False
@@ -234,12 +227,6 @@ class DynamicPriviegedWindFarmEnv(WindFarmEnv):
         # Initialize turbine directions randomly, but towards the wind
         for turbine in self.turbines:
             turbine.yaw_angle = self._np_random.uniform(self.desired_min_yaw, self.desired_max_yaw)
-
-        # if self.update_rule is not None:
-        #     for i in range(self.wind_history_length):
-        #         self.wind_direction_history.append(self.wind_process.wind_direction)
-        #         self.wind_speed_history.append(self.wind_process.wind_speed)
-        #         self.step([0]*len(self.turbines))
 
         # Get info dictionary with power output
         power_output = np.sum(self.floris_interface.get_turbine_power())
