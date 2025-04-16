@@ -33,6 +33,9 @@ class DynamicPriviegedWindFarmEnv(WindFarmEnv):
         momentum_beta=1,
         load_pyglet_visualization=False,
         parallel_dynamic_computations=False,
+        time_delta=1,
+        op_per_turbine=5,
+        op_wake_matrix_horizon=20,
         ):
         
         # Setting the wind state
@@ -47,6 +50,8 @@ class DynamicPriviegedWindFarmEnv(WindFarmEnv):
             changing_wind=changing_wind,
         )
 
+        env_type = str(len(turbine_layout[0]))
+
         # Building the environment
         super().__init__(
             turbine_layout=turbine_layout, 
@@ -58,7 +63,7 @@ class DynamicPriviegedWindFarmEnv(WindFarmEnv):
             action_representation=action_representation,
             load_pyglet_visualization=load_pyglet_visualization,
             farm_observations=['wind_speed', 'wind_direction'],
-            time_delta=5
+            time_delta=time_delta
         )
 
         self.episode_length = episode_length
@@ -72,6 +77,9 @@ class DynamicPriviegedWindFarmEnv(WindFarmEnv):
         self.momentum_alpha = momentum_alpha
         self.momentum_beta = momentum_beta
         self.parallel_dynamic_computations = parallel_dynamic_computations
+        self.time_delta = time_delta
+        self.op_per_turbine = op_per_turbine
+        self.op_wake_matrix_horizon = op_wake_matrix_horizon
 
         # Defines the points to sample the wind from 
         # This is used to get the wind state from the steady state flow field of floris
@@ -93,8 +101,6 @@ class DynamicPriviegedWindFarmEnv(WindFarmEnv):
         # self.wind_history_length = 10
 
         # Observation points update
-        self.op_per_turbine = 5
-        self.op_wake_matrix_horizon = 20
         self.op_dynamic_state_margin = 100
         self.observation_points = pd.DataFrame(columns=["x", "y", "z", "yaw", "represented_speed_u", "represented_speed_v", "represented_speed_w", "source", "t", "age"])
         self.wake_matrices = {}
@@ -128,9 +134,10 @@ class DynamicPriviegedWindFarmEnv(WindFarmEnv):
 
         # Initialize visualization if enabled
         if self.load_pyglet_visualization:
+            flow_points = self._flow_points()
             self.visualization = self.FarmVisualization(
                 self.floris_interface, 
-                flow_points=self._flow_points(),
+                flow_points=flow_points,
                 windfarm_info={
                     "bounds": self.wf_bounds,
                     "margin": self.op_dynamic_state_margin,
@@ -252,6 +259,11 @@ class DynamicPriviegedWindFarmEnv(WindFarmEnv):
             if self.load_pyglet_visualization:
                 self.steady_state_plot = self.visualization.get_cut_plane().df
 
+        # Reset observation points
+        self.observation_points = pd.DataFrame(columns=["x", "y", "z", "yaw", "represented_speed_u", "represented_speed_v", "represented_speed_w", "source", "t", "age"])
+        self.wake_matrices = {}
+
+
         # Double plot functionalities for debugging
         self.save_double_plot_images()
         self.double_plot_images = []
@@ -330,6 +342,34 @@ class DynamicPriviegedWindFarmEnv(WindFarmEnv):
         if self.state is None:
             return None
         
+        ### FOR REPORT
+        # This plots the points at which the flow is sampled to be stored in the observation points
+        # points = None
+        # wind_direction, wind_speed = self.wind_process.wind_direction, self.wind_process.wind_speed
+        # wind_direction_rad = np.deg2rad(-wind_direction - 90)
+        # d_pos = np.array([wind_speed*np.cos(wind_direction_rad), wind_speed*np.sin(wind_direction_rad), 0])
+        # d_pos = d_pos * self.time_delta
+        # for i, (coord, turbine) in enumerate(self.floris_interface.floris.farm.flow_field.turbine_map.items):
+        #     rotor_radius = turbine.rotor_radius
+        #     yaw = self.yaws_from_north[i]
+        #     yaw = np.deg2rad(-yaw)
+
+        # # Make a line of observation points at the turbine
+        #     for j, dr in enumerate(np.linspace(-rotor_radius, rotor_radius, self.op_per_turbine)):
+        #         c = np.array([coord.x1, coord.x2, coord.x3]) #xyz point
+        #         # Get the point moved from the center c by dr in the direction of the yaw
+        #         point = c + dr*np.array([np.cos(yaw), np.sin(yaw), 0])
+        #         newpts = np.vstack((np.arange(self.op_wake_matrix_horizon), ) * 3).T*d_pos + point #
+        #         if points is None:
+        #             points = newpts
+        #         else:
+        #             points = np.vstack((points, newpts))
+        # print(f"Points shape {points.shape}")
+        # print(f"Points shape old {self._flow_points()}")
+        # flow_points = (points[:,0], points[:,1], points[:,2])
+        # self.visualization.flow_points = flow_points
+        #####
+
         if self.save_double_plot:
             ss_plt = self.visualization.render(return_rgb_array=True, 
                 wind_state=self.steady_state_plot, observation_points=None,
@@ -337,32 +377,49 @@ class DynamicPriviegedWindFarmEnv(WindFarmEnv):
             dyn_plt = self.visualization.render(return_rgb_array=True, 
                 wind_state=self.dynamic_state_plot, observation_points=self.observation_points,
                 turbine_power=self.t_power_log)
-                
-            # Merge dynamic and steady state plot
-            plots = (dyn_plt, ss_plt)
-            vis = np.concatenate(plots, axis=0)
-            # Overlay observation points dynamic plot 
-            if self.update_rule == 'observation_points':
-                op_plt = self._op_render()
-                self.op_plts.append(op_plt)
-                side_pad = int((op_plt.shape[1] - op_plt.shape[0]) / 2)
-                op_plt = op_plt[:, side_pad:-side_pad, :]
+            
+            # Plot dynamic state without power data (50% of the image)
+            # 1/0
+            # IMPLEMENT DISPLAY METRICS ARGUMENT
+            # dyn_plt2 = self.visualization.render(return_rgb_array=True, 
+            #     wind_state=self.dynamic_state_plot, observation_points=None,#self.observation_points,
+            #     turbine_power=self.t_power_log, display_metrics=False)
+            # left_margin = 8
+            # dyn_plt2 = dyn_plt2[:, left_margin:left_margin+dyn_plt2.shape[0], :]
 
-                ratio = vis.shape[0] / 2 / op_plt.shape[0]
-                op_plt = cv2.resize(op_plt, dsize=None, fx=ratio, fy=ratio)
-                
-                vis[:op_plt.shape[0], -op_plt.shape[1]:, :] = op_plt
-                cv2.putText(vis, 'Gaussian filter on observation points', (5 + vis.shape[1]-op_plt.shape[1], 15), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 0), 1, cv2.LINE_AA)
+            # plt.imshow(dyn_plt2)
+            # # no white borders
+            # plt.axis('off')
+            # plt.savefig(f"figures/renders/dynamic_state_{self.runs}_{self.step_count}.png", bbox_inches='tight', pad_inches=0)
+            # plt.show()
+            
+            if self.step_count > 0:
+
+                # Merge dynamic and steady state plot
+                plots = (dyn_plt, ss_plt)
+                vis = np.concatenate(plots, axis=0)
+                # Overlay observation points dynamic plot 
+                if self.update_rule == 'observation_points':
+                    op_plt = self._op_render()
+                    self.op_plts.append(op_plt)
+                    side_pad = int((op_plt.shape[1] - op_plt.shape[0]) / 2)
+                    op_plt = op_plt[:, side_pad:-side_pad, :]
+
+                    ratio = vis.shape[0] / 2 / op_plt.shape[0]
+                    op_plt = cv2.resize(op_plt, dsize=None, fx=ratio, fy=ratio)
+                    
+                    vis[:op_plt.shape[0], -op_plt.shape[1]:, :] = op_plt
+                    cv2.putText(vis, 'Gaussian filter on observation points', (5 + vis.shape[1]-op_plt.shape[1], 15), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 0), 1, cv2.LINE_AA)
 
 
-            # Add text to both images in black, small size
-            font = cv2.FONT_HERSHEY_SIMPLEX
-            cv2.putText(vis, 'Dynamic state', (10, 20), font, 0.5, (0, 0, 0), 1, cv2.LINE_AA)
-            cv2.putText(vis, 'Steady state', (10, 20 + dyn_plt.shape[0]), font, 0.5, (0, 0, 0), 1, cv2.LINE_AA)
-            self.double_plot_images.append(vis)
+                # Add text to both images in black, small size
+                font = cv2.FONT_HERSHEY_SIMPLEX
+                cv2.putText(vis, 'Dynamic state', (10, 20), font, 0.5, (0, 0, 0), 1, cv2.LINE_AA)
+                cv2.putText(vis, 'Steady state', (10, 20 + dyn_plt.shape[0]), font, 0.5, (0, 0, 0), 1, cv2.LINE_AA)
+                self.double_plot_images.append(vis)
 
-            plt.imshow(vis)
-            plt.show()
+                plt.imshow(vis)
+                plt.show()
             
         return self.visualization.render(return_rgb_array=mode == 'rgb_array', 
             wind_state=self.dynamic_state_plot, observation_points=self.observation_points,
@@ -598,7 +655,7 @@ class DynamicPriviegedWindFarmEnv(WindFarmEnv):
 
         # Size of the wind farm
         (x_min, y_min), (x_max, y_max) = self.wf_bounds
-        r = int(self.turbines[0].rotor_radius * self.len_ratio / self.op_per_turbine)
+        r = int(self.turbines[0].rotor_radius * self.len_ratio / np.sqrt(self.op_per_turbine))
         assert r > 0, "Radius is 0, probably caused by a too small dynamic state shape"    
         # For each observation point, apply a gaussian filter
         # Average of the gaussian filters is the dynamic state
@@ -800,6 +857,7 @@ class DynamicPriviegedWindFarmEnv(WindFarmEnv):
         shape = (shape[0] + 2*self.op_dynamic_state_margin, shape[1] + 2*self.op_dynamic_state_margin)
         dynamic_plot_shape = (int(shape[0]), int(shape[1]))
         state_img = cv2.resize(self.dynamic_state["speed"], dynamic_plot_shape)
+        # im = plt.imshow(state_img.T, vmin=0, vmax=8)
         im = plt.imshow(state_img.T)
         l = 20
         x = np.linspace(self.op_dynamic_state_margin/4, dynamic_plot_shape[0]-1, l)
@@ -809,7 +867,7 @@ class DynamicPriviegedWindFarmEnv(WindFarmEnv):
         dirs = [np.deg2rad((d-90)) for d in dirs]
         U = -np.sin(dirs).reshape(X.shape)*20
         V = -np.cos(dirs).reshape(Y.shape)*20
-        plt.quiver(X, Y, U, V, units='xy', scale=1, color='lightblue')
+        # plt.quiver(X, Y, U, V, units='xy', scale=1, color='lightblue')
         # Text at every xy with direction value
         # for x, y, d in zip(X.flatten(), Y.flatten(), dirs):
         #     plt.text(x, y, f"{int(d)}", color='black', fontsize=4) 
@@ -852,7 +910,7 @@ class DynamicPriviegedWindFarmEnv(WindFarmEnv):
             # Only plot if it fits in the plot
             if x > dynamic_plot_shape[0] - 2*arrow_l or y > dynamic_plot_shape[1] - 2*arrow_l or x < 2*arrow_l or y < 2*arrow_l:
                 continue
-            plt.arrow(x, y, arrow_l*np.cos(np.deg2rad(angle)), arrow_l*np.sin(np.deg2rad(angle)), head_width=2, head_length=2, fc='k', ec='k')
+            # plt.arrow(x, y, arrow_l*np.cos(np.deg2rad(angle)), arrow_l*np.sin(np.deg2rad(angle)), head_width=2, head_length=2, fc='k', ec='k')
             uv_angle = np.degrees(np.arctan2(v, u))
             # This should be within +- 90 degrees
             if uv_angle > 90: uv_angle = uv_angle - 180
@@ -860,7 +918,7 @@ class DynamicPriviegedWindFarmEnv(WindFarmEnv):
             if self.verbose: 
                 if np.abs(uv_angle) > 20: print("UV ANGLE", uv_angle)
             uv_angle = (angle + uv_angle) % 360
-            plt.arrow(x, y, arrow_l*np.cos(np.deg2rad(uv_angle)), arrow_l*np.sin(np.deg2rad(uv_angle)), head_width=2, head_length=2, fc='orange', ec='orange')
+            # plt.arrow(x, y, arrow_l*np.cos(np.deg2rad(uv_angle)), arrow_l*np.sin(np.deg2rad(uv_angle)), head_width=2, head_length=2, fc='orange', ec='orange')
         plt.axis('off')
         plt.box(False)
         #plt.colorbar(im)
@@ -875,6 +933,8 @@ class DynamicPriviegedWindFarmEnv(WindFarmEnv):
         canvas.draw()
         data = np.frombuffer(canvas.tostring_rgb(), dtype=np.uint8)
         op_plt = data.reshape(canvas.get_width_height()[::-1] + (3,))
+        # plt.colorbar()
+        plt.savefig(f"figures/renders/step_{self.step_count}.png")
         plt.show()
         return op_plt
 
@@ -904,34 +964,6 @@ def _op_get_gaussian_filter(xyv, r=None, smooth_wake_shape=None):
             print(x0, y0, temp.shape, wake_point.shape, smooth_wake_shape)
         temp = temp[r:-r, r:-r]
         return gaussian_filter(temp, sigma=r)
-
-#@functools.partial(jax.jit, static_argnums=(2,3,4))
-def _op_get_gaussian_filter_jax(xyv, temp, r=None, smooth_wake_shape=None, margin=None):
-    x, y, val = xyv
-    # jax set x to int
-    x = x.astype(int)
-    y = y.astype(int)
-    # for each point in a circle of radius 100, set the value to u
-    # wake_point = get_circle_idxs(r) * val
-    
-    A = jnp.arange(-r,r+1)**2
-    dists = jnp.sqrt(A[:,None] + A)
-    circle = ((dists-r)<=0).astype(int)
-    wake_point = circle * val
-
-    x0, y0 = x+margin, y+margin
-    # try:
-    # temp[x0:x0+2*r+1, y0:y0+2*r+1] = wake_point
-    temp = jax.lax.dynamic_update_slice(temp, wake_point, (x0, y0))
-    # except:
-    #     print("Error in setting wake point")
-    #     print(x0, y0, temp.shape, wake_point.shape, smooth_wake_shape)
-    #temp = temp[r:-r, r:-r]
-    temp = jax.lax.dynamic_slice(temp, (r, r), smooth_wake_shape)
-    filter_size = jnp.linspace(-r, r, 2*r+1)
-    gaussian_filter = jax.scipy.stats.norm.pdf(filter_size,scale=r) * jax.scipy.stats.norm.pdf(filter_size[:, None],scale=r)
-    smooth_wake = jax.scipy.signal.convolve(temp, gaussian_filter, mode='same')
-    return smooth_wake
 
 def _op_centered_gaussians(shape, x, y, r, value):
     Ax = np.arange(-r, int(shape[0] + r))

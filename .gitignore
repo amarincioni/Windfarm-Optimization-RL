@@ -1,10 +1,12 @@
-scaffolder/
 runs/
 wandb/
 models/
 conda_envs/
-wind-farm-env/
-scripts/output/
-data/models/
+wind_farm_env/
 **.ZoneIdentifier
 **.pyc
+data/
+scripts/
+figures/
+old/
+__pycache__/

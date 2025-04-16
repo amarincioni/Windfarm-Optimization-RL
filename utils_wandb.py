@@ -1,6 +1,7 @@
 from stable_baselines3.common.callbacks import BaseCallback
 from wandb.integration.sb3 import WandbCallback
 from stable_baselines3.common.callbacks import CallbackList, BaseCallback, EvalCallback
+from stable_baselines3.common.vec_env import SubprocVecEnv
 import numpy as np
 import matplotlib.pyplot as plt
 import wandb
@@ -12,7 +13,8 @@ from utils import *
 import multiprocessing
 
 class VideoEvalCallback(BaseCallback):
-    def __init__(self, freq=1000, eval_reps=10, experiment_name="", run_id="", verbose: int = 0, env_fn=None):
+    def __init__(self, freq=1000, eval_reps=10, experiment_name="", run_id="", verbose: int = 0, env_fn=None, changing_wind=True,
+                 parallelize_evaluation=True):
         super().__init__(verbose)
         # self.model = None  # type: BaseAlgorithm
         # self.training_env # type: VecEnv
@@ -24,13 +26,15 @@ class VideoEvalCallback(BaseCallback):
         self.experiment_name = experiment_name
         self.run_id = run_id
         self.env_fn = env_fn
-
-        self.fixed_trajectory_eval_env = env_fn()
+        self.is_changing_wind_experiment = changing_wind
+        self.parallelize_evaluation = parallelize_evaluation
 
         self.n_logged = 0
 
         self.wind_direction_lists = np.load(f"data/eval/wind_directions.npy")
         self.wind_speed_lists = np.load(f"data/eval/wind_speeds.npy")
+        self.val_wind_directions = np.load(f"data/eval/val_wind_directions.npy")
+        self.val_wind_speeds = np.load(f"data/eval/val_wind_speeds.npy")
         assert len(self.wind_speed_lists) >= self.eval_reps, "Not enough wind sequences"
         self.wind_direction_lists = self.wind_direction_lists[:self.eval_reps]
         self.wind_speed_lists = self.wind_speed_lists[:self.eval_reps]
@@ -45,12 +49,32 @@ class VideoEvalCallback(BaseCallback):
         ))
         self.video_log_wind_speeds = np.ones_like(self.video_log_wind_directions) * 8.0
 
-        if not self.fixed_trajectory_eval_env.changing_wind:
-            self.wind_direction_lists = np.tile(self.wind_direction_lists[:,0], (self.wind_direction_lists.shape[1], 1)).T
+        if not self.is_changing_wind_experiment:
+            print("Fixed wind experiment detected. Will use fixed wind processes for evaluations!")
+            # self.wind_direction_lists = np.tile(self.wind_direction_lists[:,0], (self.wind_direction_lists.shape[1], 1)).T
+            # self.val_wind_directions = np.tile(self.val_wind_directions[:,0], (self.val_wind_directions.shape[1], 1)).T
+            self.wind_direction_lists = [[self.wind_direction_lists[i,0] for j in range(len(self.wind_direction_lists[0]))]for i in range(len(self.wind_direction_lists))]
+            self.wind_speed_lists = [[self.wind_speed_lists[i,0] for j in range(len(self.wind_speed_lists[0]))]for i in range(len(self.wind_speed_lists))]
+            self.val_wind_directions = [[self.val_wind_directions[i,0] for j in range(len(self.val_wind_directions[0]))]for i in range(len(self.val_wind_directions))]
+            self.val_wind_speeds = [[self.val_wind_speeds[i,0] for j in range(len(self.val_wind_speeds[0]))]for i in range(len(self.val_wind_speeds))]
+        else:
+            print("Changing wind environment detected.")
+            
+        if self.parallelize_evaluation:
+            self.ft_eval_envs = [env_fn for _ in range(self.eval_reps)]
+            print("Making parallel environments")
+            self.vec_env = SubprocVecEnv(self.ft_eval_envs, start_method="spawn")
+            print("Parallel environments created")
+            # for i in range(self.eval_reps):
+            #     self.vec_env.set_attr("wind_process", SetSequenceWindProcess(wind_directions=self.wind_direction_lists[i], wind_speeds=self.wind_speed_lists[i]))
+        
+        self.fixed_trajectory_eval_env = env_fn()
 
         # Initialize folders for logging the model weights periodically
         os.makedirs(os.path.dirname(f"data/models/run_checkpoints/{self.experiment_name}"), exist_ok=True)
         os.makedirs(os.path.dirname(f"data/models/run_checkpoints/{self.experiment_name}/{self.run_id}"), exist_ok=True)
+        
+        self.best_mean_reward = 0
 
     def _on_training_start(self) -> None:
         self._on_rollout_start()
@@ -73,16 +97,40 @@ class VideoEvalCallback(BaseCallback):
             # Video rollout
             if env.load_pyglet_visualization:
                 video = render_model(env, get_model_action(self.model), wind_directions=self.video_log_wind_directions, wind_speeds=self.video_log_wind_speeds, EPISODE_LEN=EPISODE_LEN)
+                video = [np.array(img) for img in video]
             t_after_video = time.time()
-            video = [np.array(img) for img in video]
-            
-            total_rewards, total_powers = evaluate_model(env, get_model_action(self.model), EVAL_REPS=self.eval_reps, EPISODE_LEN=EPISODE_LEN, N_SEEDS=1, verbose=False)
+
+            if self.parallelize_evaluation:
+                # Parallelize example sum]
+                # from stable_baselines3.common.evaluation import evaluate_policy
+                # rewards, lens = evaluate_policy(self.model, self.vec_env, n_eval_episodes=1, deterministic=True, return_episode_rewards=True)
+                # print(rewards, lens)
+                # 1/0
+                total_rewards, total_powers = vectorized_evaluate_model(self.vec_env, self.model, 
+                    wind_directions=self.wind_direction_lists, wind_speeds=self.wind_speed_lists,
+                    EVAL_REPS=self.eval_reps, EPISODE_LEN=EPISODE_LEN, N_SEEDS=1, verbose=False
+                )
+                total_val_rewards, total_val_powers = vectorized_evaluate_model(self.vec_env, self.model, 
+                    wind_directions=self.val_wind_directions, wind_speeds=self.val_wind_speeds,
+                    EVAL_REPS=self.eval_reps, EPISODE_LEN=EPISODE_LEN, N_SEEDS=1, verbose=False
+                )
+            else:
+                total_rewards, total_powers = evaluate_model(env, get_model_action(self.model), 
+                    wind_directions=self.wind_direction_lists, wind_speeds=self.wind_speed_lists,
+                    EVAL_REPS=self.eval_reps, EPISODE_LEN=EPISODE_LEN, N_SEEDS=1, verbose=False)
+                total_val_rewards, total_val_powers = evaluate_model(env, get_model_action(self.model), 
+                    wind_directions=self.val_wind_directions, wind_speeds=self.val_wind_speeds,
+                    EVAL_REPS=self.eval_reps, EPISODE_LEN=EPISODE_LEN, N_SEEDS=1, verbose=False)
             assert total_rewards.shape[0] == 1, "Evaluation with multiple seeds not implemented" 
             total_rewards = total_rewards[0]
             total_powers = total_powers[0]
+            total_val_rewards = total_val_rewards[0]
+            total_val_powers = total_val_powers[0]
             # Get rollout sums
-            total_power_rollout = np.sum(total_powers, axis=1)
             total_reward_rollout = np.sum(total_rewards, axis=1)
+            total_power_rollout = np.sum(total_powers, axis=1)
+            total_val_reward_rollout = np.sum(total_val_rewards, axis=1)
+            total_val_power_rollout = np.sum(total_val_powers, axis=1)
             
             # Log metrics
             logs_dict = {
@@ -94,6 +142,14 @@ class VideoEvalCallback(BaseCallback):
                 "eval/total_reward_std": total_reward_rollout.std(),
                 "eval/total_reward_max": total_reward_rollout.max(),
                 "eval/total_reward_min": total_reward_rollout.min(),
+                "eval/validation_total_power": total_val_power_rollout.mean(),
+                "eval/validation_total_power_std": total_val_power_rollout.std(),
+                "eval/validation_total_power_max": total_val_power_rollout.max(),
+                "eval/validation_total_power_min": total_val_power_rollout.min(),
+                "eval/validation_total_reward": total_val_reward_rollout.mean(),
+                "eval/validation_total_reward_std": total_val_reward_rollout.std(),
+                "eval/validation_total_reward_max": total_val_reward_rollout.max(),
+                "eval/validation_total_reward_min": total_val_reward_rollout.min(),
             }
             # Log video if available
             if env.load_pyglet_visualization:
@@ -105,6 +161,9 @@ class VideoEvalCallback(BaseCallback):
 
             # Saving the model weights (for future visualizations or use)
             self.model.save(f"data/models/run_checkpoints/{self.experiment_name}/{self.run_id}/ckpt_{self.n_logged}")
+            if np.mean(total_val_power_rollout) > self.best_mean_reward:
+                self.best_mean_reward = np.mean(total_val_power_rollout)
+                self.model.save(f"data/models/run_checkpoints/{self.experiment_name}/{self.run_id}/ckpt_best_mean_reward")
                 
             # Update logging variables
             self.n_logged += 1
@@ -180,6 +239,8 @@ def initialize_wandb_run(
         eval_freq=10000,
         env_fn=None,
         n_envs=16,
+        net_layers=2,
+        net_width=256,
         ):
     config = {
         "experiment_name": experiment_name,
@@ -192,6 +253,8 @@ def initialize_wandb_run(
         "dynamic_mode": dynamic_mode,
         "eval_reps": eval_reps,
         "n_envs": n_envs,
+        "net_layers": net_layers,
+        "net_width": net_width,
     }
     run = wandb.init(
         project="thesis_tests",
@@ -215,6 +278,7 @@ def initialize_wandb_run(
         experiment_name=experiment_name,
         run_id=run.id,
         env_fn=env_fn,
+        changing_wind=changing_wind,
     )
     callbacks = [wandb_callback, video_eval_callback]
     # eval_callback = EvalCallback(env_fn(), best_model_save_path=f"models/{run.id}/",

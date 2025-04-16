@@ -58,6 +58,9 @@ def get_4wt_symmetric_env(
         update_rule=dynamic_mode,
         load_pyglet_visualization=load_pyglet_visualization,
         parallel_dynamic_computations=parallel_dynamic_computations,
+        time_delta=5,
+        op_per_turbine=5,
+        op_wake_matrix_horizon=20,
     )
 
     return env
@@ -94,6 +97,17 @@ def get_lhs_env(
     else:
         mast_layout = None
 
+    if len(turbine_layout) == 8:
+        time_delta = 10
+        op_per_turbine = 3
+        op_wake_matrix_horizon = 20
+    elif len(turbine_layout) == 16:
+        time_delta = 10
+        op_per_turbine = 3
+        op_wake_matrix_horizon = 20
+    else:
+        raise NotImplementedError("Only 8 and 16 turbine layouts are implemented")
+    
     env = DynamicPriviegedWindFarmEnv(
         turbine_layout=turbine_layout,
         mast_layout=mast_layout,
@@ -106,9 +120,12 @@ def get_lhs_env(
         load_pyglet_visualization=load_pyglet_visualization,
         verbose=verbose,
         update_rule=dynamic_mode,
+        time_delta=time_delta,
+        op_per_turbine=op_per_turbine,
+        op_wake_matrix_horizon=op_wake_matrix_horizon,
     )
 
-    # plot the turbine layout, and masts with and x
+    # Plot turbine layout
     plt.figure()
     plt.scatter(turbine_layout[0], turbine_layout[1])
     if privileged:
