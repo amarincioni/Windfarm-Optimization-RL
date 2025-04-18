@@ -27,4 +27,14 @@ The main scripts are:
 - `evaluate_baselines.py`: This script is used to evaluate the baseline methods. It computes the scores for the baseline methods across all the environments.
 - `dynamic_windfarm_env.py`: This script contains the implementation of the dynamic wind farm environment. It is based on the FLORIS Gym environment and extends it with a dynamic wind formulation.
 
+Notebooks are provided to run the experiments and visualize the results. The main notebooks are:
 
+- `test_floris_sr.ipynb`: Runs preliminary experiments on FLORIS serial refine method.
+
+- `evaluate_baselines.ipynb`: Computes performance scores for different baseline methods.
+
+- `get_wandb_results.ipynb`: Downloads the performance scores for the PPO agent from Weights & Biases for further analysis.
+
+- `test_computational_efficiency.ipynb`: Runs computational efficiency experiments to compare the speed of the quasi-dynamic environment.
+
+- Various `plot_*.ipynb` notebooks: These can be used to visualize and plot results from the experiments. Different notebooks focus on specific aspects of the analysis and performance metrics.
